@@ -4,7 +4,6 @@ import { tempService } from '../utils/tempService';
 
 export type ConnectionMode = 'SIMULATOR' | 'LIVE';
 
-// Initial structure for loading state
 const initialTelemetry: TelemetryFrame = {
   timestamp: Date.now(),
   imu: { roll: 0, pitch: 0, yaw: 0, ax: 0, ay: 0, az: 9.81, gx: 0, gy: 0, gz: 0 },
@@ -13,12 +12,17 @@ const initialTelemetry: TelemetryFrame = {
     bpm: 0,
     beatConfidence: 0,
     rmsEnergyDb: -60,
+    peakAmplitude: 0,
     bassRatio: 0,
     rhythmSpeed: 'SLOW',
     energyLevel: 'LOW',
     activityLevel: 'SMOOTH',
-    classification: 'Silence',
-    isBeatDetected: false
+    classification: 'Listening...',
+    genre: 'Listening...',
+    audioContext: 'Listening...',
+    syllableCount: 0,
+    voiceActive: false,
+    isBeatDetected: false,
   },
   system: {
     online: false,
@@ -27,10 +31,17 @@ const initialTelemetry: TelemetryFrame = {
     cpuTemp: 0,
     wifiSsid: 'None',
     wifiSignalDb: -100,
+    operatingMode: 'AUTO',
+    audioSource: 'MIC',
     activeGait: 'STAND',
     activeDance: 'NONE',
     speedMultiplier: 1.0,
-    bodyHeight: -60.0
+    bodyHeight: -60.0,
+    manualLedPattern: null,
+    manualMood: null,
+    showAudioLogs: false,
+    robotReady: false,
+    bodyRoll: 0,
   },
   servos: []
 };
@@ -50,11 +61,11 @@ export const useTelemetry = (mode: ConnectionMode, wsIp: string) => {
         id: 'init',
         timestamp: new Date().toLocaleTimeString(),
         level: 'info',
-        message: 'Attempting connection to live host...',
+        message: `Connecting to ${wsIp}...`,
         source: 'DASHBOARD'
       }]);
     }
-  }, [mode]);
+  }, [mode, wsIp]);
 
   // Connect to correct service
   useEffect(() => {
@@ -78,8 +89,7 @@ export const useTelemetry = (mode: ConnectionMode, wsIp: string) => {
       let reconnectTimeout: any;
 
       const connect = () => {
-        // Handle websocket connection
-        const cleanIp = wsIp.replace('http://', '').replace('https://', '');
+        const cleanIp = wsIp.replace('http://', '').replace('https://', '').replace('ws://', '').replace('wss://', '');
         const wsUrl = `ws://${cleanIp}/api/ws`;
         
         try {
@@ -88,16 +98,62 @@ export const useTelemetry = (mode: ConnectionMode, wsIp: string) => {
 
           ws.onopen = () => {
             setConnectionStatus('CONNECTED');
-            addLocalLog('success', `Connected to Pi Server: ${wsUrl}`);
+            addLocalLog('success', `WebSocket connected: ${wsUrl}`);
           };
 
           ws.onmessage = (event) => {
             try {
-              const data = JSON.parse(event.data);
-              if (data.type === 'telemetry') {
-                setTelemetry(data.payload);
-              } else if (data.type === 'log') {
-                setLogs(prev => [data.payload, ...prev].slice(0, 100));
+              const msg = JSON.parse(event.data);
+              if (msg.type === 'telemetry') {
+                const raw = msg.data || msg.payload;
+                if (raw) {
+                  setTelemetry(prev => {
+                    // If backend sends flat RobotState fields, map into structured TelemetryFrame
+                    const isBeat = typeof raw.bpm === 'number' && raw.bpm > 0;
+                    return {
+                      ...prev,
+                      timestamp: Date.now(),
+                      imu: {
+                        ...prev.imu,
+                        roll: typeof raw.tilt === 'number' ? raw.tilt : prev.imu.roll,
+                      },
+                      audio: {
+                        ...prev.audio,
+                        bpm: typeof raw.bpm === 'number' ? raw.bpm : prev.audio.bpm,
+                        energyLevel: raw.energy || prev.audio.energyLevel,
+                        activityLevel: raw.activity || prev.audio.activityLevel,
+                        rhythmSpeed: raw.rhythm_speed || prev.audio.rhythmSpeed,
+                        classification: raw.context || prev.audio.classification,
+                        audioContext: raw.context || prev.audio.audioContext,
+                        genre: raw.genre || prev.audio.genre,
+                        rmsEnergyDb: typeof raw.rms_db === 'number' ? raw.rms_db : prev.audio.rmsEnergyDb,
+                        peakAmplitude: typeof raw.peak_amplitude === 'number' ? raw.peak_amplitude : prev.audio.peakAmplitude,
+                        syllableCount: typeof raw.syllable_count === 'number' ? raw.syllable_count : prev.audio.syllableCount,
+                        voiceActive: typeof raw.voice_active === 'boolean' ? raw.voice_active : prev.audio.voiceActive,
+                        isBeatDetected: isBeat,
+                      },
+                      system: {
+                        ...prev.system,
+                        online: true,
+                        serialConnected: true,
+                        operatingMode: (raw.mode === 'MANUAL' ? 'MANUAL' : 'AUTO'),
+                        audioSource: (raw.audio_source === 'BT' ? 'BT' : 'MIC'),
+                        activeDance: raw.current_move || prev.system.activeDance,
+                        plannedDance: raw.planned_move || prev.system.plannedDance,
+                        manualLedPattern: raw.manual_led_pattern,
+                        manualMood: raw.manual_mood || raw.mood,
+                        showAudioLogs: raw.show_audio_logs,
+                        robotReady: raw.robot_ready,
+                        bodyRoll: raw.tilt,
+                      }
+                    };
+                  });
+                }
+              } else if (msg.type === 'log') {
+                const payload = msg.payload || msg.data;
+                if (payload) {
+                  setLogs(prev => [payload, ...prev].slice(0, 100));
+                }
               }
             } catch (err) {
               console.error('Error parsing WS message:', err);
@@ -134,7 +190,7 @@ export const useTelemetry = (mode: ConnectionMode, wsIp: string) => {
 
   const addLocalLog = (level: LogEntry['level'], message: string) => {
     const newLog: LogEntry = {
-      id: Math.random().toString(),
+      id: Math.random().toString(36).substring(2, 9),
       timestamp: new Date().toLocaleTimeString(),
       level,
       message,
@@ -143,18 +199,63 @@ export const useTelemetry = (mode: ConnectionMode, wsIp: string) => {
     setLogs(prev => [newLog, ...prev].slice(0, 100));
   };
 
-  const sendCommand = useCallback((cmd: string) => {
+  const sendCommand = useCallback(async (cmd: string) => {
     if (mode === 'SIMULATOR') {
       tempService.sendCommand(cmd);
-    } else {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      return;
+    }
+
+    // First try WebSocket
+    let sentViaWs = false;
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      try {
         wsRef.current.send(JSON.stringify({ type: 'command', action: cmd }));
-        addLocalLog('info', `Sent command: "${cmd}"`);
-      } else {
-        addLocalLog('error', `Cannot send command "${cmd}": Socket disconnected.`);
+        sentViaWs = true;
+        addLocalLog('info', `WS: "${cmd}"`);
+      } catch (e) {
+        sentViaWs = false;
       }
     }
-  }, [mode]);
+
+    // Also send via REST API for fallback / special endpoints
+    const cleanIp = wsIp.replace('http://', '').replace('https://', '').replace('ws://', '').replace('wss://', '');
+    const baseUrl = `http://${cleanIp}/api`;
+
+    try {
+      if (cmd.startsWith('MODE:')) {
+        const m = cmd.split(':')[1];
+        await fetch(`${baseUrl}/mode?mode=${m}`, { method: 'POST' });
+      } else if (cmd.startsWith('LED:')) {
+        const pattern = cmd.split(':')[1];
+        if (pattern === 'AUTO') {
+          await fetch(`${baseUrl}/led/auto`, { method: 'POST' });
+        } else {
+          await fetch(`${baseUrl}/led?pattern=${pattern}`, { method: 'POST' });
+        }
+      } else if (cmd.startsWith('EMOTION:')) {
+        const emotion = cmd.split(':')[1];
+        if (emotion === 'AUTO') {
+          await fetch(`${baseUrl}/emotion/auto`, { method: 'POST' });
+        } else if (emotion === 'TEST') {
+          await fetch(`${baseUrl}/emotion/test`, { method: 'POST' });
+        } else {
+          await fetch(`${baseUrl}/emotion?mood=${emotion}`, { method: 'POST' });
+        }
+      } else if (cmd.startsWith('AUDIO_SOURCE:')) {
+        const src = cmd.split(':')[1];
+        await fetch(`${baseUrl}/audio/source?source=${src}`, { method: 'POST' });
+      } else if (cmd === 'TOGGLE_LOGGING') {
+        await fetch(`${baseUrl}/logging/toggle`, { method: 'POST' });
+      } else if (!sentViaWs) {
+        await fetch(`${baseUrl}/command?cmd=${encodeURIComponent(cmd)}`, { method: 'POST' });
+        addLocalLog('info', `REST: "${cmd}"`);
+      }
+    } catch (err) {
+      if (!sentViaWs) {
+        addLocalLog('error', `Command failed: ${err instanceof Error ? err.message : 'Unknown'}`);
+      }
+    }
+  }, [mode, wsIp]);
 
   return {
     telemetry,

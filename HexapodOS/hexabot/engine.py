@@ -65,3 +65,71 @@ def trigger_manual_command(command: str):
     from .serial_link import send_to_esp32
     send_to_esp32(command.upper())
     return True
+
+def set_led_pattern(pattern: str):
+    """Override LED pattern manually."""
+    with state.lock:
+        state.manual_led_pattern = pattern
+    log_event(f"✨ LED Pattern set to: {pattern}")
+
+def reset_led_auto():
+    """Return LEDs to auto mood sync."""
+    with state.lock:
+        state.manual_led_pattern = None
+    log_event("🎵 LEDs returned to AUTO MOOD SYNC")
+
+def set_emotion(mood: str):
+    """Override LCD eye emotion."""
+    with state.lock:
+        state.manual_mood = mood
+    log_event(f"📺 Emotion set to: {mood}")
+
+def reset_emotion_auto():
+    """Return LCD to auto mood sync."""
+    with state.lock:
+        state.manual_mood = None
+    log_event("📺 LCD returned to AUTO MOOD SYNC")
+
+def run_emotion_test():
+    """Run automated emotion test cycle in background thread."""
+    import time as _time
+    EMOTIONS = ["IDLE", "AGGRESSIVE", "ENERGY", "CHILL", "VOICE_ACTIVE", "HAPPY", "CONFUSED"]
+    def _cycle():
+        for mood in EMOTIONS:
+            with state.lock:
+                state.manual_mood = mood
+            log_event(f"📺 Testing: {mood}")
+            _time.sleep(2.5)
+        with state.lock:
+            state.manual_mood = None
+        log_event("📺 Emotion test complete")
+    threading.Thread(target=_cycle, daemon=True).start()
+
+def set_audio_source(source: str):
+    """Set audio source: MIC or BT."""
+    with state.lock:
+        state.audio_source = source.upper()
+    log_event(f"🎧 Audio source set to: {source.upper()}")
+
+def toggle_logging():
+    """Toggle background telemetry logging."""
+    with state.lock:
+        state.show_audio_logs = not state.show_audio_logs
+        enabled = state.show_audio_logs
+    log_event(f"📁 Telemetry Logging: {'ON' if enabled else 'OFF'}")
+    return enabled
+
+def get_mic_snapshot() -> dict:
+    """Get a snapshot of live microphone readings."""
+    with state.lock:
+        return {
+            "rms_db": getattr(state, "rms_db", 0.0),
+            "peak_amplitude": getattr(state, "peak_amplitude", 0.0),
+            "bpm": getattr(state, "bpm", 0),
+            "syllable_count": getattr(state, "syllable_count", 0),
+            "mood": getattr(state, "mood", "IDLE"),
+            "energy_level": getattr(state, "energy_level", "LOW"),
+            "activity_level": getattr(state, "activity_level", "LOW"),
+            "rhythm_speed": getattr(state, "rhythm_speed", "SLOW"),
+            "audio_context": getattr(state, "audio_context", "UNKNOWN"),
+        }

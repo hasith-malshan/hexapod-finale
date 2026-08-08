@@ -32,15 +32,26 @@ class ConnectionManager:
                     payload = {
                         "type": "telemetry",
                         "data": {
-                            "bpm": state.bpm,
-                            "energy": state.energy_level,
-                            "activity": state.activity_level,
-                            "mood": state.mood,
-                            "context": state.audio_context,
-                            "tilt": state.body_roll,
-                            "mode": state.operating_mode,
-                            "current_move": state.current_move,
-                            "planned_move": state.planned_move
+                            "bpm": getattr(state, "bpm", 0),
+                            "energy": getattr(state, "energy_level", "LOW"),
+                            "activity": getattr(state, "activity_level", "LOW"),
+                            "rhythm_speed": getattr(state, "rhythm_speed", "SLOW"),
+                            "mood": getattr(state, "mood", "IDLE"),
+                            "context": getattr(state, "audio_context", "UNKNOWN"),
+                            "genre": getattr(state, "genre", "UNKNOWN"),
+                            "tilt": getattr(state, "body_roll", 0.0),
+                            "mode": getattr(state, "operating_mode", "AUTO"),
+                            "current_move": getattr(state, "current_move", "STAND"),
+                            "planned_move": getattr(state, "planned_move", None),
+                            "rms_db": getattr(state, "rms_db", 0.0),
+                            "peak_amplitude": getattr(state, "peak_amplitude", 0.0),
+                            "syllable_count": getattr(state, "syllable_count", 0),
+                            "voice_active": getattr(state, "voice_active", False),
+                            "manual_led_pattern": getattr(state, "manual_led_pattern", None),
+                            "manual_mood": getattr(state, "manual_mood", None),
+                            "show_audio_logs": getattr(state, "show_audio_logs", False),
+                            "audio_source": getattr(state, "audio_source", "MIC"),
+                            "robot_ready": getattr(state, "robot_ready", False),
                         }
                     }
                 

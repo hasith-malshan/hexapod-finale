@@ -1,11 +1,20 @@
 import type { TelemetryFrame, LogEntry, ServoState } from '../types';
 
 class TempService {
+  private operatingMode: 'AUTO' | 'MANUAL' = 'AUTO';
+  private audioSource: 'MIC' | 'BT' = 'MIC';
+  private showAudioLogs: boolean = false;
+  private manualLedPattern: string | null = null;
+  private manualMood: string | null = null;
   private activeGait: TelemetryFrame['system']['activeGait'] = 'STAND';
   private activeDance: string = 'NONE';
+  private plannedDance: string = 'DANCE_WAVE';
   private speedMultiplier = 1.0;
   private bodyHeight = -60.0;
   private batteryLevel = 8.2;
+  private bodyRoll = 0.0;
+  private robotReady = true;
+
   private logs: LogEntry[] = [
     { id: '1', timestamp: new Date().toLocaleTimeString(), level: 'info', message: 'TempService Initialized', source: 'DASHBOARD' },
     { id: '2', timestamp: new Date().toLocaleTimeString(), level: 'success', message: 'Offline Simulator Mode active', source: 'DASHBOARD' }
@@ -76,7 +85,7 @@ class TempService {
     // Simulate IMU
     const baseOscillation = isWalking ? Math.sin(t * 5 * this.speedMultiplier) * 8 : 0;
     const imu = {
-      roll: parseFloat((baseOscillation + Math.sin(t * 0.5) * 1.5).toFixed(2)),
+      roll: parseFloat((baseOscillation + Math.sin(t * 0.5) * 1.5 + this.bodyRoll).toFixed(2)),
       pitch: parseFloat((baseOscillation * 0.5 + Math.cos(t * 0.5) * 1.0).toFixed(2)),
       yaw: parseFloat(((t * 2) % 360).toFixed(2)),
       ax: parseFloat((Math.sin(t * 5) * (isWalking ? 0.3 : 0.02)).toFixed(3)),
@@ -110,16 +119,21 @@ class TempService {
     };
 
     // Simulate Audio DSP (which is run on Pi)
-    const isBeat = Math.sin(t * Math.PI * (120 / 60)) > 0.8; // 120 BPM beat simulation
+    const isBeat = Math.sin(t * Math.PI * (128 / 60)) > 0.75;
     const audio = {
-      bpm: 124,
-      beatConfidence: 0.82,
-      rmsEnergyDb: parseFloat((-25 + Math.sin(t * 2) * 8 + (isBeat ? 15 : 0)).toFixed(1)),
-      bassRatio: parseFloat((0.35 + Math.sin(t) * 0.1).toFixed(2)),
+      bpm: 128,
+      beatConfidence: 0.88,
+      rmsEnergyDb: parseFloat((-28 + Math.sin(t * 2) * 8 + (isBeat ? 14 : 0)).toFixed(1)),
+      peakAmplitude: parseFloat((0.45 + Math.sin(t * 3) * 0.3).toFixed(2)),
+      bassRatio: parseFloat((0.42 + Math.sin(t) * 0.1).toFixed(2)),
       rhythmSpeed: 'MEDIUM' as const,
       energyLevel: 'MEDIUM' as const,
-      activityLevel: 'MODERATE' as const,
-      classification: isBeat && Math.random() > 0.7 ? 'Dance/Electronic Music' : 'Ambient Noise',
+      activityLevel: 'BUSY' as const,
+      classification: isBeat ? 'Electronic / Dance Beats' : 'Ambient Music',
+      genre: 'Synthwave / Dance',
+      audioContext: isBeat ? 'Upbeat Synthwave' : 'Ambient Room Sound',
+      syllableCount: Math.floor(Math.abs(Math.sin(t * 0.3) * 6)),
+      voiceActive: false,
       isBeatDetected: isBeat
     };
 
@@ -127,7 +141,6 @@ class TempService {
     const updatedServos = this.servos.map(s => {
       let angleOffset = 0;
       if (isWalking) {
-        // Simple leg phase shift based on index to simulate tripod gait
         const legIndex = Math.floor(s.id / 3);
         const phase = (legIndex % 2) * Math.PI;
         if (s.name.includes('Coxa')) {
@@ -156,12 +169,20 @@ class TempService {
         serialConnected: true,
         batteryLevel: this.batteryLevel,
         cpuTemp: parseFloat((42.5 + Math.sin(t * 0.05) * 2.0 + (isWalking ? 4.5 : 0)).toFixed(1)),
-        wifiSsid: 'Hexapod_Lab_Net',
-        wifiSignalDb: -58 + Math.round(Math.sin(t * 0.1) * 4),
+        wifiSsid: 'Hexapod-AP',
+        wifiSignalDb: -52 + Math.round(Math.sin(t * 0.1) * 3),
+        operatingMode: this.operatingMode,
+        audioSource: this.audioSource,
         activeGait: this.activeGait,
         activeDance: this.activeDance,
+        plannedDance: this.plannedDance,
         speedMultiplier: this.speedMultiplier,
-        bodyHeight: this.bodyHeight
+        bodyHeight: this.bodyHeight,
+        manualLedPattern: this.manualLedPattern,
+        manualMood: this.manualMood,
+        showAudioLogs: this.showAudioLogs,
+        robotReady: this.robotReady,
+        bodyRoll: this.bodyRoll,
       },
       servos: updatedServos
     };
@@ -175,26 +196,26 @@ class TempService {
 
     if (src === 'ESP32') {
       const msgs = [
-        { l: 'info' as const, m: 'IMU MPU6050 calibration offset verified' },
-        { l: 'info' as const, m: 'Tripod gait parameters synchronized' },
-        { l: 'warn' as const, m: 'Servo 5 temperature warming: 45C' }
+        { l: 'info' as const, m: 'IMU MPU6050 calibration verified' },
+        { l: 'info' as const, m: 'Tripod gait telemetry synchronized' },
+        { l: 'warn' as const, m: 'Servo 4 temperature normal: 42C' }
       ];
       const selected = msgs[Math.floor(Math.random() * msgs.length)];
       msg = selected.m;
       lvl = selected.l;
     } else if (src === 'PI') {
       const msgs = [
-        { l: 'info' as const, m: 'YAMNet Classification update: Rock/Pop detected' },
-        { l: 'success' as const, m: 'Data sync successfully uploaded to local SQLite logs' },
-        { l: 'info' as const, m: 'LCD Display driver refresh cycle' }
+        { l: 'info' as const, m: 'Audio DSP: 128 BPM detected with high confidence' },
+        { l: 'success' as const, m: 'Choreography state machine: Dance dispatched' },
+        { l: 'info' as const, m: 'LCD eye UI frame rendered @ 33Hz' }
       ];
       const selected = msgs[Math.floor(Math.random() * msgs.length)];
       msg = selected.m;
       lvl = selected.l;
     } else {
       const msgs = [
-        { l: 'success' as const, m: 'Configuration presets successfully cached locally' },
-        { l: 'info' as const, m: 'Ping to central host: 12ms' }
+        { l: 'success' as const, m: 'Dashboard command stream active' },
+        { l: 'info' as const, m: 'Ping to Hexapod-AP: 8ms' }
       ];
       const selected = msgs[Math.floor(Math.random() * msgs.length)];
       msg = selected.m;
@@ -219,17 +240,62 @@ class TempService {
 
   // APIs accessed by components
   public sendCommand(cmd: string) {
-    this.addLog('info', `Sent command: "${cmd}"`, 'DASHBOARD');
+    this.addLog('info', `Command: "${cmd}"`, 'DASHBOARD');
 
     // Parse commands to change state
-    if (cmd.startsWith('WALK_') || cmd === 'STAND' || cmd === 'RELAX') {
+    if (cmd.startsWith('MODE:')) {
+      const m = cmd.split(':')[1].toUpperCase() as 'AUTO' | 'MANUAL';
+      this.operatingMode = m;
+      this.addLog('success', `Operating Mode switched to: ${m}`, 'PI');
+    } else if (cmd.startsWith('AUDIO_SOURCE:')) {
+      const s = cmd.split(':')[1].toUpperCase() as 'MIC' | 'BT';
+      this.audioSource = s;
+      this.addLog('success', `Audio source set to: ${s}`, 'PI');
+    } else if (cmd === 'TOGGLE_LOGGING') {
+      this.showAudioLogs = !this.showAudioLogs;
+      this.addLog('info', `Background logging: ${this.showAudioLogs ? 'ON' : 'OFF'}`, 'PI');
+    } else if (cmd.startsWith('LED:')) {
+      const pattern = cmd.split(':')[1];
+      if (pattern === 'AUTO') {
+        this.manualLedPattern = null;
+        this.addLog('success', 'LEDs returned to AUTO Mood Sync', 'PI');
+      } else {
+        this.manualLedPattern = pattern;
+        this.addLog('success', `LED pattern overridden: ${pattern}`, 'PI');
+      }
+    } else if (cmd.startsWith('EMOTION:')) {
+      const mood = cmd.split(':')[1];
+      if (mood === 'AUTO') {
+        this.manualMood = null;
+        this.addLog('success', 'LCD Emotion returned to AUTO Mood Sync', 'PI');
+      } else if (mood === 'TEST') {
+        this.addLog('info', 'Running 7-step Emotion Test Cycle (2.5s each)...', 'PI');
+        const emotions = ['IDLE', 'AGGRESSIVE', 'ENERGY', 'CHILL', 'VOICE_ACTIVE', 'HAPPY', 'CONFUSED'];
+        emotions.forEach((e, idx) => {
+          setTimeout(() => {
+            this.manualMood = e;
+            this.addLog('info', `Emotion cycle: ${e}`, 'PI');
+          }, idx * 1500);
+        });
+        setTimeout(() => {
+          this.manualMood = null;
+          this.addLog('success', 'Emotion test cycle complete', 'PI');
+        }, emotions.length * 1500);
+      } else {
+        this.manualMood = mood;
+        this.addLog('success', `LCD Emotion set to: ${mood}`, 'PI');
+      }
+    } else if (cmd.startsWith('TEST_LEG_')) {
+      const legNum = cmd.replace('TEST_LEG_', '');
+      this.addLog('info', `Testing individual Leg ${legNum} actuation sequence...`, 'ESP32');
+    } else if (cmd.startsWith('WALK_') || cmd === 'STAND' || cmd === 'RELAX' || cmd === 'TURN_LEFT' || cmd === 'TURN_RIGHT') {
       this.activeGait = cmd as TelemetryFrame['system']['activeGait'];
       this.activeDance = 'NONE';
-      this.addLog('success', `Movement Mode changed to: ${cmd}`, 'ESP32');
+      this.addLog('success', `Gait mode: ${cmd}`, 'ESP32');
     } else if (cmd.startsWith('DANCE_')) {
       this.activeGait = 'DANCE';
       this.activeDance = cmd.substring(6);
-      this.addLog('success', `Dance routine triggered: ${this.activeDance}`, 'ESP32');
+      this.addLog('success', `Dance routine: ${this.activeDance}`, 'ESP32');
     } else if (cmd.startsWith('BODY_HEIGHT:')) {
       const h = parseFloat(cmd.split(':')[1]);
       if (!isNaN(h)) {
@@ -243,7 +309,6 @@ class TempService {
         this.addLog('info', `Set speed factor: ${s}x`, 'PI');
       }
     } else if (cmd.startsWith('SET ')) {
-      // Raw servo change SET ch angle
       const parts = cmd.split(' ');
       const ch = parseInt(parts[1]);
       const angle = parseInt(parts[2]);
@@ -252,7 +317,6 @@ class TempService {
         this.addLog('info', `Override Servo ${ch} (${this.servos[ch].name}) to ${angle} deg`, 'ESP32');
       }
     } else if (cmd.startsWith('CALIBRATE ')) {
-      // CALIBRATE ch offset
       const parts = cmd.split(' ');
       const ch = parseInt(parts[1]);
       const offset = parseInt(parts[2]);

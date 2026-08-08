@@ -4,16 +4,24 @@ import type { ConnectionMode } from './hooks/useTelemetry';
 import { Header } from './components/common/Header';
 import { LocomotionControl } from './components/controls/LocomotionControl';
 import { PresetDances } from './components/controls/PresetDances';
+import { LedControl } from './components/controls/LedControl';
+import { EmotionControl } from './components/controls/EmotionControl';
+import { LegDiagnostics } from './components/controls/LegDiagnostics';
+import { ModeControl } from './components/controls/ModeControl';
 import { Calibration } from './components/controls/Calibration';
 import { RadarVisualizer } from './components/sensors/RadarVisualizer';
 import { IMUVisualizer } from './components/sensors/IMUVisualizer';
 import { AudioVisualizer } from './components/sensors/AudioVisualizer';
 import { LogFeed } from './components/common/LogFeed';
 import { GodModeCli } from './components/controls/GodModeCli';
+import { Zap, Music, Sun, Cpu, Terminal } from 'lucide-react';
+
+type TabSection = 'dashboard' | 'choreo' | 'lighting' | 'diagnostics' | 'terminal';
 
 export const App: React.FC = () => {
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>('SIMULATOR');
-  const [wsIp, setWsIp] = useState<string>('localhost:8000');
+  const [wsIp, setWsIp] = useState<string>('10.42.0.1:8000');
+  const [activeTab, setActiveTab] = useState<TabSection>('dashboard');
   
   const { telemetry, logs, connectionStatus, sendCommand } = useTelemetry(connectionMode, wsIp);
 
@@ -25,7 +33,7 @@ export const App: React.FC = () => {
     telemetry.ultrasonic.right < 40;
 
   return (
-    <div className="main-content">
+    <div className="main-content" style={{ maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
       {/* Global Dashboard Header */}
       <Header 
         telemetry={telemetry}
@@ -36,54 +44,150 @@ export const App: React.FC = () => {
         setWsIp={setWsIp}
       />
 
-      {/* Grid Row 1: Core Navigation & Environmental Ranging */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
-        <LocomotionControl 
-          telemetry={telemetry}
-          sendCommand={sendCommand}
-        />
-        
-        <RadarVisualizer 
-          data={telemetry.ultrasonic}
-          isObstacleAlert={isObstacleAlert}
-        />
-
-        <IMUVisualizer 
-          data={telemetry.imu}
-        />
+      {/* Navigation Tabs for Clean Organization */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <button
+          onClick={() => setActiveTab('dashboard')}
+          className={`glow-button ${activeTab === 'dashboard' ? 'active' : ''}`}
+          style={{ padding: '8px 16px', fontSize: '12px' }}
+        >
+          <Zap className="w-4 h-4" /> Live Dashboard
+        </button>
+        <button
+          onClick={() => setActiveTab('choreo')}
+          className={`glow-button ${activeTab === 'choreo' ? 'active' : ''}`}
+          style={{ padding: '8px 16px', fontSize: '12px' }}
+        >
+          <Music className="w-4 h-4" /> Choreography (24 Dances)
+        </button>
+        <button
+          onClick={() => setActiveTab('lighting')}
+          className={`glow-button ${activeTab === 'lighting' ? 'active' : ''}`}
+          style={{ padding: '8px 16px', fontSize: '12px' }}
+        >
+          <Sun className="w-4 h-4" /> LEDs & LCD Eyes
+        </button>
+        <button
+          onClick={() => setActiveTab('diagnostics')}
+          className={`glow-button ${activeTab === 'diagnostics' ? 'active' : ''}`}
+          style={{ padding: '8px 16px', fontSize: '12px' }}
+        >
+          <Cpu className="w-4 h-4" /> Leg Diagnostics & Calibration
+        </button>
+        <button
+          onClick={() => setActiveTab('terminal')}
+          className={`glow-button ${activeTab === 'terminal' ? 'active' : ''}`}
+          style={{ padding: '8px 16px', fontSize: '12px' }}
+        >
+          <Terminal className="w-4 h-4" /> God-Mode CLI & Logs
+        </button>
       </div>
 
-      {/* Grid Row 2: Diagnostics & Custom Choreographies */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
-        <AudioVisualizer 
-          data={telemetry.audio}
-        />
+      {/* TAB 1: LIVE DASHBOARD */}
+      {activeTab === 'dashboard' && (
+        <div className="flex flex-col gap-5">
+          {/* Row: Mode Controller */}
+          <ModeControl 
+            telemetry={telemetry}
+            sendCommand={sendCommand}
+          />
 
-        <PresetDances 
-          telemetry={telemetry}
-          sendCommand={sendCommand}
-        />
-      </div>
+          {/* Row 1: Core Navigation & Environmental Ranging */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+            <LocomotionControl 
+              telemetry={telemetry}
+              sendCommand={sendCommand}
+            />
+            
+            <RadarVisualizer 
+              data={telemetry.ultrasonic}
+              isObstacleAlert={isObstacleAlert}
+            />
 
-      {/* Grid Row 3: Advanced Calibration matrix */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
-        <Calibration 
-          telemetry={telemetry}
-          sendCommand={sendCommand}
-        />
-      </div>
+            <IMUVisualizer 
+              data={telemetry.imu}
+            />
+          </div>
 
-      {/* Grid Row 4: System terminal log output */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
-        <LogFeed 
-          logs={logs}
-        />
-      </div>
+          {/* Row 2: Audio DSP & Quick Dances */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+            <AudioVisualizer 
+              data={telemetry.audio}
+            />
 
-      {/* Grid Row 5: God Mode CLI Terminal */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px', marginTop: '10px' }}>
-        <GodModeCli sendCommand={sendCommand} />
-      </div>
+            <PresetDances 
+              telemetry={telemetry}
+              sendCommand={sendCommand}
+            />
+          </div>
+
+          {/* Row 3: Quick LED & Emotion Overrides */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+            <LedControl 
+              telemetry={telemetry}
+              sendCommand={sendCommand}
+            />
+            <EmotionControl 
+              telemetry={telemetry}
+              sendCommand={sendCommand}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: CHOREOGRAPHY MATRIX */}
+      {activeTab === 'choreo' && (
+        <div className="flex flex-col gap-5">
+          <PresetDances 
+            telemetry={telemetry}
+            sendCommand={sendCommand}
+          />
+          <AudioVisualizer 
+            data={telemetry.audio}
+          />
+        </div>
+      )}
+
+      {/* TAB 3: LIGHTING & LCD EYE EMOTIONS */}
+      {activeTab === 'lighting' && (
+        <div className="flex flex-col gap-5">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+            <LedControl 
+              telemetry={telemetry}
+              sendCommand={sendCommand}
+            />
+            <EmotionControl 
+              telemetry={telemetry}
+              sendCommand={sendCommand}
+            />
+          </div>
+          <IMUVisualizer 
+            data={telemetry.imu}
+          />
+        </div>
+      )}
+
+      {/* TAB 4: LEG DIAGNOSTICS & CALIBRATION */}
+      {activeTab === 'diagnostics' && (
+        <div className="flex flex-col gap-5">
+          <LegDiagnostics 
+            telemetry={telemetry}
+            sendCommand={sendCommand}
+          />
+          <Calibration 
+            telemetry={telemetry}
+            sendCommand={sendCommand}
+          />
+        </div>
+      )}
+
+      {/* TAB 5: GOD-MODE CLI & LOGS */}
+      {activeTab === 'terminal' && (
+        <div className="flex flex-col gap-5">
+          <GodModeCli sendCommand={sendCommand} />
+          <LogFeed logs={logs} />
+        </div>
+      )}
     </div>
   );
 };
