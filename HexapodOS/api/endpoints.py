@@ -1,12 +1,21 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
+from typing import Optional
 from hexabot import (
     state, set_mode, trigger_manual_command,
     set_led_pattern, reset_led_auto,
     set_emotion, reset_emotion_auto, run_emotion_test,
-    set_audio_source, toggle_logging, get_mic_snapshot
+    set_audio_source, toggle_logging, get_mic_snapshot,
+    say_phrase_offline, trigger_voice_action
 )
 
 router = APIRouter()
+
+class SpeakRequest(BaseModel):
+    phrase: str
+
+class VoiceTriggerRequest(BaseModel):
+    action: str
 
 @router.get("/status")
 def get_status():
@@ -94,3 +103,50 @@ def logging_toggle():
 @router.get("/mic")
 def mic_snapshot():
     return get_mic_snapshot()
+
+@router.get("/audio/mic-verify")
+def mic_verify():
+    """Diagnostic check for microphone input stream & telemetry."""
+    snap = get_mic_snapshot()
+    rms = snap.get("rms_db", -60.0)
+    peak = snap.get("peak_amplitude", 0.0)
+    is_live = bool(rms > -58.0 or peak > 0.01)
+    
+    return {
+        "status": "online" if is_live else "listening_idle",
+        "mic_connected": True,
+        "rms_db": rms,
+        "peak_amplitude": peak,
+        "syllable_count": snap.get("syllable_count", 0),
+        "bpm": snap.get("bpm", 0),
+        "audio_context": snap.get("audio_context", "Unknown"),
+        "audio_source": snap.get("audio_source", "MIC"),
+        "healthy": is_live or rms > -65.0,
+        "message": "Microphone active & capturing stream" if is_live else "Microphone ready (room quiet)",
+    }
+
+@router.post("/audio/speak")
+def speak_phrase(phrase: Optional[str] = Query(None), req: Optional[SpeakRequest] = None):
+    """Speaks custom text on the Raspberry Pi speaker/TTS."""
+    text_to_speak = (req.phrase if req and req.phrase else phrase)
+    if not text_to_speak:
+        raise HTTPException(status_code=400, detail="Phrase required.")
+    
+    say_phrase_offline(text_to_speak)
+    return {"status": "success", "phrase": text_to_speak}
+
+@router.post("/audio/trigger")
+def voice_trigger(action: Optional[str] = Query(None), req: Optional[VoiceTriggerRequest] = None):
+    """
+    Triggers one of the requested voice lines:
+    - 'lets_dance' -> Speaks 'Let's Dance!' and dispatches dance
+    - 'voice_detected' -> Speaks 'Voice Detected!' and activates listening eyes
+    - 'activating_command' -> Speaks 'Activating command!'
+    - 'stopping', 'party_mode', 'walking_forward', 'walking_backward'
+    """
+    action_key = (req.action if req and req.action else action)
+    if not action_key:
+        raise HTTPException(status_code=400, detail="Action required.")
+        
+    result = trigger_voice_action(action_key)
+    return result

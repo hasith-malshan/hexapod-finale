@@ -8,15 +8,16 @@ import { LedControl } from './components/controls/LedControl';
 import { EmotionControl } from './components/controls/EmotionControl';
 import { LegDiagnostics } from './components/controls/LegDiagnostics';
 import { ModeControl } from './components/controls/ModeControl';
+import { AudioCommander } from './components/controls/AudioCommander';
 import { Calibration } from './components/controls/Calibration';
 import { RadarVisualizer } from './components/sensors/RadarVisualizer';
 import { IMUVisualizer } from './components/sensors/IMUVisualizer';
 import { AudioVisualizer } from './components/sensors/AudioVisualizer';
 import { LogFeed } from './components/common/LogFeed';
 import { GodModeCli } from './components/controls/GodModeCli';
-import { Zap, Music, Sun, Cpu, Terminal } from 'lucide-react';
+import { Zap, Music, Sun, Cpu, Terminal, Volume2 } from 'lucide-react';
 
-type TabSection = 'dashboard' | 'choreo' | 'lighting' | 'diagnostics' | 'terminal';
+type TabSection = 'dashboard' | 'audio' | 'choreo' | 'lighting' | 'diagnostics' | 'terminal';
 
 export const App: React.FC = () => {
   // Automatically detect host/port if accessed via browser on Pi
@@ -61,6 +62,13 @@ export const App: React.FC = () => {
           <Zap className="w-4 h-4" /> Live Dashboard
         </button>
         <button
+          onClick={() => setActiveTab('audio')}
+          className={`glow-button ${activeTab === 'audio' ? 'active' : ''}`}
+          style={{ padding: '8px 16px', fontSize: '12px' }}
+        >
+          <Volume2 className="w-4 h-4" /> Audio & Voice Triggers
+        </button>
+        <button
           onClick={() => setActiveTab('choreo')}
           className={`glow-button ${activeTab === 'choreo' ? 'active' : ''}`}
           style={{ padding: '8px 16px', fontSize: '12px' }}
@@ -95,6 +103,12 @@ export const App: React.FC = () => {
         <div className="flex flex-col gap-5">
           {/* Row: Mode Controller */}
           <ModeControl 
+            telemetry={telemetry}
+            sendCommand={sendCommand}
+          />
+
+          {/* Row: Audio Commander (Mic Verification & Voice Triggers) */}
+          <AudioCommander 
             telemetry={telemetry}
             sendCommand={sendCommand}
           />
@@ -142,7 +156,26 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 2: CHOREOGRAPHY MATRIX */}
+      {/* TAB 2: AUDIO LAB & VOICE TRIGGERS */}
+      {activeTab === 'audio' && (
+        <div className="flex flex-col gap-5">
+          <AudioCommander 
+            telemetry={telemetry}
+            sendCommand={sendCommand}
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+            <AudioVisualizer 
+              data={telemetry.audio}
+            />
+            <ModeControl 
+              telemetry={telemetry}
+              sendCommand={sendCommand}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: CHOREOGRAPHY MATRIX */}
       {activeTab === 'choreo' && (
         <div className="flex flex-col gap-5">
           <PresetDances 
@@ -155,7 +188,7 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: LIGHTING & LCD EYE EMOTIONS */}
+      {/* TAB 4: LIGHTING & LCD EYE EMOTIONS */}
       {activeTab === 'lighting' && (
         <div className="flex flex-col gap-5">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
@@ -174,7 +207,7 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 4: LEG DIAGNOSTICS & CALIBRATION */}
+      {/* TAB 5: LEG DIAGNOSTICS & CALIBRATION */}
       {activeTab === 'diagnostics' && (
         <div className="flex flex-col gap-5">
           <LegDiagnostics 
@@ -188,7 +221,7 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 5: GOD-MODE CLI & LOGS */}
+      {/* TAB 6: GOD-MODE CLI & LOGS */}
       {activeTab === 'terminal' && (
         <div className="flex flex-col gap-5">
           <GodModeCli sendCommand={sendCommand} />

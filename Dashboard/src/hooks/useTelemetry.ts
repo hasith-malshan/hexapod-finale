@@ -108,7 +108,6 @@ export const useTelemetry = (mode: ConnectionMode, wsIp: string) => {
                 const raw = msg.data || msg.payload;
                 if (raw) {
                   setTelemetry(prev => {
-                    // If backend sends flat RobotState fields, map into structured TelemetryFrame
                     const isBeat = typeof raw.bpm === 'number' && raw.bpm > 0;
                     return {
                       ...prev,
@@ -246,6 +245,14 @@ export const useTelemetry = (mode: ConnectionMode, wsIp: string) => {
         await fetch(`${baseUrl}/audio/source?source=${src}`, { method: 'POST' });
       } else if (cmd === 'TOGGLE_LOGGING') {
         await fetch(`${baseUrl}/logging/toggle`, { method: 'POST' });
+      } else if (cmd.startsWith('VOICE_TRIGGER:')) {
+        const trigger = cmd.replace('VOICE_TRIGGER:', '');
+        await fetch(`${baseUrl}/audio/trigger?action=${encodeURIComponent(trigger)}`, { method: 'POST' });
+        addLocalLog('info', `Triggered Voice: "${trigger}"`);
+      } else if (cmd.startsWith('SPEAK:')) {
+        const phrase = cmd.replace('SPEAK:', '');
+        await fetch(`${baseUrl}/audio/speak?phrase=${encodeURIComponent(phrase)}`, { method: 'POST' });
+        addLocalLog('info', `Speak on Pi: "${phrase}"`);
       } else if (!sentViaWs) {
         await fetch(`${baseUrl}/command?cmd=${encodeURIComponent(cmd)}`, { method: 'POST' });
         addLocalLog('info', `REST: "${cmd}"`);

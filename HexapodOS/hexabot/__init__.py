@@ -5,6 +5,7 @@ from .engine import (
     set_emotion, reset_emotion_auto, run_emotion_test,
     set_audio_source, toggle_logging, get_mic_snapshot
 )
+from .voice_cmd import say_phrase_offline, trigger_voice_action
 from .serial_link import send_to_esp32
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "set_led_pattern", "reset_led_auto",
     "set_emotion", "reset_emotion_auto", "run_emotion_test",
     "set_audio_source", "toggle_logging", "get_mic_snapshot",
+    "say_phrase_offline", "trigger_voice_action",
 ]

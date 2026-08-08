@@ -3,7 +3,7 @@ import logging
 
 from .serial_link import esp32_reader_thread, connect_to_esp32
 from .audio_dsp import audio_listener
-from .voice_cmd import yamnet_context_thread
+from .voice_cmd import yamnet_context_thread, say_phrase_offline, trigger_voice_action
 from .led_engine import led_thread
 from .lcd_engine import display_loop
 from .state import state
@@ -37,7 +37,8 @@ def start_hexabot_os():
             threading.Thread(target=audio_listener, daemon=True, name="audio_listener"),
         ])
     else:
-        log_event("⚠️ MANUAL mode selected. AI and Audio threads will not be started.")
+        log_event("⚠️ MANUAL mode selected. Audio DSP & listener active for telemetry.")
+        threads.append(threading.Thread(target=audio_listener, daemon=True, name="audio_listener"))
 
     log_event("🚀 Starting OS daemon threads...")
     for t in threads:
@@ -132,4 +133,6 @@ def get_mic_snapshot() -> dict:
             "activity_level": getattr(state, "activity_level", "LOW"),
             "rhythm_speed": getattr(state, "rhythm_speed", "SLOW"),
             "audio_context": getattr(state, "audio_context", "UNKNOWN"),
+            "audio_source": getattr(state, "audio_source", "MIC"),
+            "healthy": bool(getattr(state, "rms_db", -60.0) > -65.0 or getattr(state, "bpm", 0) > 0),
         }
