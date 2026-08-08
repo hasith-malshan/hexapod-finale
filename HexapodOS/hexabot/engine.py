@@ -1,3 +1,4 @@
+import os
 import threading
 import logging
 
@@ -12,6 +13,25 @@ def log_event(message: str):
     logging.info(message)
     print(message)
 
+def set_system_volume(percent: int = 100):
+    """Sets system ALSA and PulseAudio speaker volume to maximum level (or specified %)."""
+    pct = max(0, min(100, percent))
+    commands = [
+        f"amixer set Master {pct}% > /dev/null 2>&1",
+        f"amixer set PCM {pct}% > /dev/null 2>&1",
+        f"amixer set Speaker {pct}% > /dev/null 2>&1",
+        f"amixer set Headphone {pct}% > /dev/null 2>&1",
+        f"amixer set Digital {pct}% > /dev/null 2>&1",
+        f"pactl set-sink-volume @DEFAULT_SINK@ {pct}% > /dev/null 2>&1",
+    ]
+    for cmd in commands:
+        try:
+            os.system(cmd)
+        except Exception:
+            pass
+    log_event(f"🔊 Speaker volume maximized to: {pct}%")
+    return pct
+
 def start_hexabot_os():
     """
     Initializes the Hexabot OS logic by connecting to the ESP32 and starting
@@ -21,6 +41,9 @@ def start_hexabot_os():
     log_event("       🤖 CODEGENIX HEXABOT OS - UNIFIED 🤖")
     log_event("=" * 54)
     
+    # Maximize speaker volume to 100% on startup
+    set_system_volume(100)
+
     # Establish connection first
     connect_to_esp32()
 

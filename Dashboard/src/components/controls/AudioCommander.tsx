@@ -7,7 +7,9 @@ import {
   Activity, 
   CheckCircle2, 
   Radio,
-  MessageSquare
+  MessageSquare,
+  Volume1,
+  Sparkles
 } from 'lucide-react';
 
 interface AudioCommanderProps {
@@ -92,6 +94,7 @@ export const AudioCommander: React.FC<AudioCommanderProps> = ({
   const [activeVoiceTrigger, setActiveVoiceTrigger] = useState<string | null>(null);
   const [micVerificationResult, setMicVerificationResult] = useState<string | null>(null);
   const [isVerifyingMic, setIsVerifyingMic] = useState<boolean>(false);
+  const [speakerVolume, setSpeakerVolume] = useState<number>(100);
 
   // Compute VU meter bar
   const rmsDb = audio.rmsEnergyDb || -60;
@@ -112,6 +115,16 @@ export const AudioCommander: React.FC<AudioCommanderProps> = ({
     sendCommand(`SPEAK:${customPhrase.trim()}`);
   };
 
+  const handleMaxVolume = () => {
+    setSpeakerVolume(100);
+    sendCommand('VOLUME_MAX');
+  };
+
+  const handleVolumeChange = (newVal: number) => {
+    setSpeakerVolume(newVal);
+    sendCommand(`VOLUME:${newVal}`);
+  };
+
   const handleVerifyMicInput = () => {
     setIsVerifyingMic(true);
     setMicVerificationResult('Capturing 2-second audio sample from ALSA soundcard...');
@@ -125,18 +138,29 @@ export const AudioCommander: React.FC<AudioCommanderProps> = ({
 
   return (
     <div className="glass-card flex flex-col gap-5" style={{ height: '100%' }}>
-      {/* Header */}
+      {/* Header with Speaker Volume Booster */}
       <div className="flex justify-between items-center flex-wrap gap-2">
         <div>
           <h3 className="title-glow flex items-center gap-2" style={{ margin: 0 }}>
             <Volume2 className="w-5 h-5 text-[#00f2fe]" /> Audio Lab & Voice Commander
           </h3>
           <p className="subtitle" style={{ fontSize: '11px', margin: 0 }}>
-            Real-time microphone input verification and Raspberry Pi speech output triggers
+            Real-time microphone input verification and Raspberry Pi speaker audio controls
           </p>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Quick Volume Max Button */}
+          <button
+            onClick={handleMaxVolume}
+            className="glow-button primary"
+            style={{ padding: '6px 14px', fontSize: '11px', borderColor: 'var(--neon-green)' }}
+            title="Set ALSA Master, PCM, & PulseAudio to 100% Maximum"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-[#00ff88]" />
+            <span>Volume: 100% MAX</span>
+          </button>
+
           <span className={`status-badge ${isMicHealthy ? 'online' : 'connecting'}`}>
             <Radio className="w-3 h-3 animate-pulse" />
             {isMicHealthy ? 'MIC LIVE & CAPTURING' : 'MIC IDLE'}
@@ -144,7 +168,34 @@ export const AudioCommander: React.FC<AudioCommanderProps> = ({
         </div>
       </div>
 
-      {/* SECTION 1: MICROPHONE INPUT VERIFICATION */}
+      {/* SECTION 1: SPEAKER AMPLIFICATION & VOLUME SLIDER */}
+      <div className="bg-white/5 border border-white/5 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <Volume2 className="w-5 h-5 text-[#ffb703]" />
+          <div>
+            <div className="font-bold text-xs text-white">Speaker Master Volume Level</div>
+            <div className="text-[10px] text-[#8e9bb4]">ALSA / PulseAudio / Master Hardware Mixer</div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 flex-1 max-w-[320px]">
+          <Volume1 className="w-4 h-4 text-[#8e9bb4]" />
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            value={speakerVolume}
+            onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
+            className="w-full accent-[#ffb703] h-1.5 bg-white/10 rounded-lg cursor-pointer"
+          />
+          <span className="font-mono font-bold text-xs text-[#ffb703] min-w-[45px] text-right">
+            {speakerVolume}%
+          </span>
+        </div>
+      </div>
+
+      {/* SECTION 2: MICROPHONE INPUT VERIFICATION */}
       <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex flex-col gap-3">
         <div className="flex justify-between items-center flex-wrap gap-2">
           <div className="flex items-center gap-2">
@@ -229,7 +280,7 @@ export const AudioCommander: React.FC<AudioCommanderProps> = ({
         )}
       </div>
 
-      {/* SECTION 2: REQUESTED VOICE OUTPUT PRESETS */}
+      {/* SECTION 3: REQUESTED VOICE OUTPUT PRESETS */}
       <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <Volume2 className="w-4 h-4 text-[#9d4edd]" />
@@ -270,7 +321,7 @@ export const AudioCommander: React.FC<AudioCommanderProps> = ({
         </div>
       </div>
 
-      {/* SECTION 3: CUSTOM TEXT-TO-SPEECH (TTS) BOX */}
+      {/* SECTION 4: CUSTOM TEXT-TO-SPEECH (TTS) BOX */}
       <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <MessageSquare className="w-4 h-4 text-[#ffb703]" />

@@ -245,6 +245,13 @@ export const useTelemetry = (mode: ConnectionMode, wsIp: string) => {
         await fetch(`${baseUrl}/audio/source?source=${src}`, { method: 'POST' });
       } else if (cmd === 'TOGGLE_LOGGING') {
         await fetch(`${baseUrl}/logging/toggle`, { method: 'POST' });
+      } else if (cmd.startsWith('VOLUME:')) {
+        const pct = cmd.replace('VOLUME:', '');
+        await fetch(`${baseUrl}/audio/volume?percent=${pct}`, { method: 'POST' });
+        addLocalLog('success', `Volume set to: ${pct}%`);
+      } else if (cmd === 'VOLUME_MAX') {
+        await fetch(`${baseUrl}/audio/volume/max`, { method: 'POST' });
+        addLocalLog('success', `Speaker volume boosted to 100% MAX!`);
       } else if (cmd.startsWith('VOICE_TRIGGER:')) {
         const trigger = cmd.replace('VOICE_TRIGGER:', '');
         await fetch(`${baseUrl}/audio/trigger?action=${encodeURIComponent(trigger)}`, { method: 'POST' });

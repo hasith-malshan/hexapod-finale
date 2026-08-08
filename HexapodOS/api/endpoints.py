@@ -6,7 +6,7 @@ from hexabot import (
     set_led_pattern, reset_led_auto,
     set_emotion, reset_emotion_auto, run_emotion_test,
     set_audio_source, toggle_logging, get_mic_snapshot,
-    say_phrase_offline, trigger_voice_action
+    set_system_volume, say_phrase_offline, trigger_voice_action
 )
 
 router = APIRouter()
@@ -124,6 +124,18 @@ def mic_verify():
         "healthy": is_live or rms > -65.0,
         "message": "Microphone active & capturing stream" if is_live else "Microphone ready (room quiet)",
     }
+
+@router.post("/audio/volume")
+def set_volume(percent: int = Query(100, ge=0, le=100)):
+    """Sets system speaker volume to percent (0-100%)."""
+    val = set_system_volume(percent)
+    return {"status": "success", "volume_percent": val}
+
+@router.post("/audio/volume/max")
+def max_volume():
+    """Sets system speaker volume to 100% MAX."""
+    val = set_system_volume(100)
+    return {"status": "success", "volume_percent": val, "message": "Speaker volume boosted to 100% MAX"}
 
 @router.post("/audio/speak")
 def speak_phrase(phrase: Optional[str] = Query(None), req: Optional[SpeakRequest] = None):
