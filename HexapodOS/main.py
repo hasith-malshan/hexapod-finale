@@ -18,6 +18,19 @@ console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setLevel(logging.INFO)
 logging.getLogger().addHandler(console_handler)
 
+# --- AUDIO PERMISSIONS HACK FOR SUDO ---
+# Connect a root-launched process to the user's PipeWire/PulseAudio server.
+os.environ["PULSE_SERVER"] = "unix:/run/user/1000/pulse/native"
+for cookie_path in (
+        "/home/codegenix/.config/pulse/cookie",
+        "/home/codegenix/.pulse-cookie",
+        "/home/codegenix/.config/pulse-cookie",
+):
+    if os.path.exists(cookie_path):
+        os.environ["PULSE_COOKIE"] = cookie_path
+        break
+os.environ.pop("XDG_RUNTIME_DIR", None)
+
 # --- APP INITIALIZATION ---
 app = FastAPI(title="Hexapod OS Unified Server")
 
