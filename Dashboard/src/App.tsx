@@ -153,6 +153,9 @@ export const App: React.FC = () => {
               sendCommand={sendCommand}
             />
           </div>
+
+          {/* Row 4: Live Telemetry & ESP32 Log Screen */}
+          <LogFeed logs={logs} clearLogs={() => sendCommand('CLEAR_LOGS')} />
         </div>
       )}
 

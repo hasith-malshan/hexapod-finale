@@ -4,12 +4,15 @@ import threading
 import logging
 from .state import state
 
-def log_event(message: str):
-    logging.info(message)
-    print(message)
+# Import log_event lazily or define forwarding wrapper
+def emit_log(message: str, level: str = "info", source: str = "ESP32"):
+    from .engine import log_event
+    log_event(message, level=level, source=source)
 
 # Global serial instance
 esp32_serial = None
+last_tilt_log_time = 0.0
+last_dist_log_time = 0.0
 
 def connect_to_esp32():
     global esp32_serial
@@ -18,12 +21,12 @@ def connect_to_esp32():
         try:
             connection = serial.Serial(port, 115200, timeout=1)
             print(f"✅ Connected to ESP32 on {port}")
-            log_event(f"--- SYSTEM BOOT: USB CONNECTED ON {port} ---")
+            emit_log(f"--- SYSTEM BOOT: ESP32 Connected on {port} (115200 baud) ---", level="success", source="ESP32")
             esp32_serial = connection
             return connection
         except Exception:
             continue
-    print("❌ ESP32 not found. Commands will be simulated.")
+    emit_log("⚠️ ESP32 not detected on hardware ports. Running in telemetry simulation mode.", level="warn", source="ESP32")
     esp32_serial = None
     return None
 
@@ -34,16 +37,15 @@ def send_to_esp32(command: str):
         state.current_move = command
 
     if not (esp32_serial and esp32_serial.is_open):
-        if state.show_audio_logs:
-            log_event(f"🤖 [SIMULATED] {command}")
+        emit_log(f"🤖 [COMMAND DISPATCHED]: {command}", level="info", source="PI")
         return
 
     try:
         esp32_serial.write((command + "\n").encode("utf-8"))
         esp32_serial.flush()
-        log_event(f"📡 [PI SENT]: {command}")
+        emit_log(f"📡 [PI SENT TO ESP32]: {command}", level="success", source="PI")
     except Exception as exc:
-        log_event(f"❌ Serial write error: {exc}")
+        emit_log(f"❌ Serial write error to ESP32: {exc}", level="error", source="ESP32")
 
 def evaluate_single_distance(dist: float) -> str:
     """
@@ -70,11 +72,12 @@ def update_ultrasonic_zones(d_front: float, d_back: float):
     - 60 - 90 cm: OBSTACLE CAUTION (ALL LEDs Amber Glow, Caution Voice Alert)
     - > 90 cm: CLEAR TRAJECTORY (ALL LEDs Dynamic Music Beat Sync)
     """
+    global last_dist_log_time
     now = time.time()
     zone_f = evaluate_single_distance(d_front)
     zone_b = evaluate_single_distance(d_back)
 
-    # Determine highest priority zone across front & back (ignoring <30cm excluded zone)
+    # Determine highest priority zone across front & back
     if zone_f == "DANGER" or zone_b == "DANGER":
         overall_zone = "DANGER"
     elif zone_f == "WARNING" or zone_b == "WARNING":
@@ -87,6 +90,12 @@ def update_ultrasonic_zones(d_front: float, d_back: float):
         state.ultrasonic_back = d_back
         state.obstacle_zone = overall_zone
 
+        # Throttled distance telemetry log (~every 2.5s)
+        if now - last_dist_log_time > 2.5:
+            last_dist_log_time = now
+            lvl = "error" if overall_zone == "DANGER" else "warn" if overall_zone == "WARNING" else "info"
+            emit_log(f"📡 [ESP32 ULTRASONIC]: Front={d_front:.1f}cm ({zone_f}), Rear={d_back:.1f}cm ({zone_b}) | Status: {overall_zone}", level=lvl, source="ESP32")
+
         if overall_zone == "DANGER":
             should_speak = (now - state.last_obstacle_voice_time > 4.5) and getattr(state, "voice_obstacle_alert_enabled", True)
             if should_speak:
@@ -94,6 +103,7 @@ def update_ultrasonic_zones(d_front: float, d_back: float):
                 phrase = "Warning! Critical obstacle ahead! Stopping!" if zone_f == "DANGER" else "Warning! Obstacle behind! Stopping!"
                 from .voice_cmd import say_phrase_offline
                 say_phrase_offline(phrase)
+                emit_log(f"🛑 [EMERGENCY STOP]: Obstacle < 60cm detected! Spoke: '{phrase}'", level="error", source="PI")
 
         elif overall_zone == "WARNING":
             should_speak = (now - state.last_obstacle_voice_time > 6.0) and getattr(state, "voice_obstacle_alert_enabled", True)
@@ -102,11 +112,11 @@ def update_ultrasonic_zones(d_front: float, d_back: float):
                 phrase = "Obstacle detected ahead." if zone_f == "WARNING" else "Obstacle detected behind."
                 from .voice_cmd import say_phrase_offline
                 say_phrase_offline(phrase)
+                emit_log(f"🟠 [OBSTACLE CAUTION]: Distance {d_front:.1f}cm. Spoke: '{phrase}'", level="warn", source="PI")
 
 def esp32_reader_thread():
-    """Reads incoming USB serial data and triggers the READY handshake & telemetry."""
-    global esp32_serial
-    # Import locally to avoid circular dependency
+    """Reads incoming USB serial data and streams readings to the log screen in real time."""
+    global esp32_serial, last_tilt_log_time
     from .choreography import handle_robot_ready
     
     while True:
@@ -118,8 +128,9 @@ def esp32_reader_thread():
             if not line:
                 continue
 
-            # 1. The Handshake Magic: When ESP32 says READY, send the next command
+            # 1. The Handshake Magic: When ESP32 says READY
             if line == "READY":
+                emit_log("🔌 [ESP32 HANDSHAKE]: Robot Ready for next move", level="success", source="ESP32")
                 handle_robot_ready()
 
             # 2. Tilt / IMU readings
@@ -130,6 +141,10 @@ def esp32_reader_thread():
                     if math.isfinite(roll):
                         with state.lock:
                             state.body_roll = roll
+                        now = time.time()
+                        if now - last_tilt_log_time > 3.0:
+                            last_tilt_log_time = now
+                            emit_log(f"⚖️ [ESP32 IMU]: Chassis Tilt Roll={roll:.1f}°", level="info", source="ESP32")
                 except ValueError:
                     pass
 
@@ -143,8 +158,10 @@ def esp32_reader_thread():
                 except Exception:
                     pass
 
+            # 4. Any other raw readings from ESP32 (voltage, servo angles, calibrations)
             else:
-                log_event(f"🤖 [ESP32 SAYS]: {line}")
+                emit_log(f"🔌 [ESP32]: {line}", level="info", source="ESP32")
+
         except (ValueError, OSError, serial.SerialException) as e:
-            log_event(f"⚠️ Serial read error: {e}")
+            emit_log(f"⚠️ Serial read error: {e}", level="warn", source="ESP32")
             time.sleep(0.1)

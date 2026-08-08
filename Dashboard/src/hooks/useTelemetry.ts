@@ -286,6 +286,9 @@ export const useTelemetry = (mode: ConnectionMode, wsIp: string) => {
       } else if (cmd.startsWith('AUDIO_SOURCE:')) {
         const src = cmd.split(':')[1];
         await fetch(`${baseUrl}/audio/source?source=${src}`, { method: 'POST' });
+      } else if (cmd === 'CLEAR_LOGS') {
+        setLogs([]);
+        await fetch(`${baseUrl}/logs/clear`, { method: 'POST' });
       } else if (cmd === 'TOGGLE_LOGGING') {
         await fetch(`${baseUrl}/logging/toggle`, { method: 'POST' });
       } else if (cmd.startsWith('VOLUME:')) {
