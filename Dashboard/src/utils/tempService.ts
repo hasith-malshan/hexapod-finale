@@ -105,23 +105,23 @@ class TempService {
       gz: parseFloat((isWalking ? 5.0 : Math.random() * 0.2).toFixed(2))
     };
 
-    // Simulate Ultrasonic distance sensors (0-30cm Danger, 30-80cm Warning, >80cm Clear)
+    // Simulate Ultrasonic distance sensors (0-30cm Excluded, 30-60cm Danger, 60-90cm Warning, >90cm Clear)
     let dF = 120;
     let dB = 150;
     let dL = 80;
     let dR = 90;
 
     if (this.activeGait === 'WALK_FORWARD') {
-      dF = Math.max(18, 120 - ((this.frameCount % 80) * 1.5));
-      if (dF < 30 && this.frameCount % 25 === 0) {
-        this.addLog('error', `🛑 [CRITICAL HAZARD <30cm]: Distance ${dF.toFixed(0)}cm! ALL LEDs Red Flash. Spoke: 'Critical obstacle ahead! Stopping!'`, 'ESP32');
-      } else if (dF <= 80 && this.frameCount % 40 === 0) {
-        this.addLog('warn', `🟠 [OBSTACLE 30-80cm]: Distance ${dF.toFixed(0)}cm! ALL LEDs Amber. Spoke: 'Obstacle detected ahead.'`, 'ESP32');
+      dF = Math.max(32, 120 - ((this.frameCount % 90) * 1.5));
+      if (dF >= 30 && dF <= 60 && this.frameCount % 25 === 0) {
+        this.addLog('error', `🛑 [30-60cm DANGER]: Distance ${dF.toFixed(0)}cm! ALL LEDs Red Flash. Spoke: 'Critical obstacle ahead! Stopping!'`, 'ESP32');
+      } else if (dF > 60 && dF <= 90 && this.frameCount % 40 === 0) {
+        this.addLog('warn', `🟠 [60-90cm CAUTION]: Distance ${dF.toFixed(0)}cm! ALL LEDs Amber. Spoke: 'Obstacle detected ahead.'`, 'ESP32');
       }
     } else if (this.activeGait === 'WALK_BACKWARD') {
-      dB = Math.max(18, 150 - ((this.frameCount % 80) * 2.0));
-      if (dB < 30 && this.frameCount % 25 === 0) {
-        this.addLog('error', `🛑 [CRITICAL HAZARD <30cm]: Rear Distance ${dB.toFixed(0)}cm! ALL LEDs Red Flash. Spoke: 'Warning! Obstacle behind!'`, 'ESP32');
+      dB = Math.max(32, 150 - ((this.frameCount % 90) * 2.0));
+      if (dB >= 30 && dB <= 60 && this.frameCount % 25 === 0) {
+        this.addLog('error', `🛑 [30-60cm DANGER]: Rear Distance ${dB.toFixed(0)}cm! ALL LEDs Red Flash. Spoke: 'Warning! Obstacle behind!'`, 'ESP32');
       }
     }
 

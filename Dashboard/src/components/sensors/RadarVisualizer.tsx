@@ -1,10 +1,10 @@
 import React from 'react';
 import type { UltrasonicData } from '../../types';
-import { ShieldAlert, Compass, Cpu, Volume2, Sparkles, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ShieldAlert, Compass, Cpu, Volume2, Sparkles, AlertTriangle, CheckCircle2, Ban } from 'lucide-react';
 
 interface RadarVisualizerProps {
   data: UltrasonicData;
-  isObstacleAlert: boolean;
+  isObstacleAlert?: boolean;
 }
 
 export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
@@ -12,23 +12,39 @@ export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
 }) => {
   const { front, back } = data;
 
-  // Custom zones requested:
-  // 0 - 30cm: Hazard / Danger zone (ALL LEDs Red, voice alert, stop)
-  // 30 - 80cm: Obstacle zone (ALL LEDs Amber, voice alert)
-  // > 80cm: Safe / Clear (ALL LEDs normal music sync)
-  const isDanger = front < 30.0 || back < 30.0;
-  const isWarning = !isDanger && (front <= 80.0 || back <= 80.0);
-
-  const getDistanceColor = (val: number) => {
-    if (val < 30.0) return '#ff3366'; // Danger Red
-    if (val <= 80.0) return '#ffb703'; // Warning Amber
-    return '#00ff88'; // Clear Green
+  // Exact clarified zones:
+  // 0 - 30cm: Excluded due to leg lengths (Filtered)
+  // 30 - 60cm: DANGER (Critical hazard, Red LEDs, Stop)
+  // 60 - 90cm: OBSTACLE CAUTION (Amber LEDs, Voice alert)
+  // > 90cm: CLEAR TRAJECTORY (Green, music beat sync)
+  const evalZone = (val: number) => {
+    if (val < 30.0) return 'EXCLUDED';
+    if (val <= 60.0) return 'DANGER';
+    if (val <= 90.0) return 'WARNING';
+    return 'CLEAR';
   };
 
-  const getZoneLabel = (val: number) => {
-    if (val < 30.0) return 'DANGER (<30cm)';
-    if (val <= 80.0) return 'OBSTACLE (30-80cm)';
-    return 'CLEAR (>80cm)';
+  const frontZone = evalZone(front);
+  const backZone = evalZone(back);
+
+  const isDanger = frontZone === 'DANGER' || backZone === 'DANGER';
+  const isWarning = !isDanger && (frontZone === 'WARNING' || backZone === 'WARNING');
+  const isExcluded = !isDanger && !isWarning && (frontZone === 'EXCLUDED' || backZone === 'EXCLUDED');
+
+  const getDistanceColor = (val: number) => {
+    const z = evalZone(val);
+    if (z === 'EXCLUDED') return '#8e9bb4'; // Muted grey for leg exclusion
+    if (z === 'DANGER') return '#ff3366';   // Danger Red (30-60cm)
+    if (z === 'WARNING') return '#ffb703';  // Warning Amber (60-90cm)
+    return '#00ff88';                       // Clear Green (>90cm)
+  };
+
+  const getZoneBadge = (val: number) => {
+    const z = evalZone(val);
+    if (z === 'EXCLUDED') return 'LEG EXCLUSION (0-30cm)';
+    if (z === 'DANGER') return 'DANGER (30-60cm)';
+    if (z === 'WARNING') return 'OBSTACLE (60-90cm)';
+    return 'CLEAR (>90cm)';
   };
 
   return (
@@ -40,7 +56,7 @@ export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
             <Compass className="w-4 h-4 text-[#00f2fe]" /> Dual Ultrasonic Collision Radar
           </h3>
           <p className="subtitle" style={{ fontSize: '11px', margin: 0 }}>
-            Front & Rear distance sensors with Voice Alerts & LED strip color sync
+            Front & Rear distance sensors with Leg Exclusion, Obstacle Caution & Voice Alerts
           </p>
         </div>
 
@@ -50,7 +66,7 @@ export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
         </div>
       </div>
 
-      {/* ACTIVE LED PATTERN & VOICE STATUS BANNER */}
+      {/* ALL LED STRIP STATUS & VOICE ALERT BANNER */}
       <div 
         className="rounded-xl p-3 flex items-center justify-between flex-wrap gap-2 transition-all"
         style={{
@@ -72,10 +88,10 @@ export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
             </div>
             <div className="text-[10px] text-[#8e9bb4]">
               {isDanger 
-                ? 'Proximity < 30cm: Emergency Red strobe & voice alert active' 
+                ? '30-60cm: Critical Hazard! Emergency Red Strobe & Voice Alert: Stopping!' 
                 : isWarning 
-                ? 'Obstacle 30-80cm: Amber warning LEDs & proximity caution voice' 
-                : 'Distance > 80cm: Path clear, LEDs syncing with music beats'}
+                ? '60-90cm: Obstacle Caution! Amber LEDs & Voice Alert: Obstacle ahead.' 
+                : '>90cm: Trajectory Clear. LEDs syncing with music beats. (0-30cm filtered for leg length)'}
             </div>
           </div>
         </div>
@@ -108,29 +124,45 @@ export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
             ▼ REAR: {back.toFixed(0)}cm
           </div>
 
-          {/* Zone 1: Critical Danger Ring (0-30cm) */}
+          {/* Zone 0: Leg Exclusion Inner Ring (0-30cm) */}
           <div 
             style={{ 
               position: 'absolute',
-              width: '65px',
-              height: '65px',
+              width: '45px',
+              height: '45px',
+              border: '1px dotted #8e9bb4',
+              borderRadius: '50%',
+              pointerEvents: 'none',
+              backgroundColor: 'rgba(142, 155, 180, 0.08)'
+            }}
+            title="0-30cm: Hexapod Leg Reach Exclusion Ring"
+          />
+
+          {/* Zone 1: Danger Ring (30-60cm) */}
+          <div 
+            style={{ 
+              position: 'absolute',
+              width: '90px',
+              height: '90px',
               border: '1.5px dashed #ff3366',
               borderRadius: '50%',
               pointerEvents: 'none',
               backgroundColor: 'rgba(255, 51, 102, 0.05)'
             }}
+            title="30-60cm: Critical Hazard Ring"
           />
 
-          {/* Zone 2: Warning Obstacle Ring (30-80cm) */}
+          {/* Zone 2: Obstacle Caution Ring (60-90cm) */}
           <div 
             style={{ 
               position: 'absolute',
-              width: '130px',
-              height: '130px',
+              width: '140px',
+              height: '140px',
               border: '1px dashed #ffb703',
               borderRadius: '50%',
               pointerEvents: 'none'
             }}
+            title="60-90cm: Obstacle Caution Ring"
           />
         </div>
 
@@ -154,7 +186,7 @@ export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
               Trig: <span className="text-[#00f2fe]">GPIO 18</span> | Echo: <span className="text-[#00f2fe]">GPIO 19</span>
             </div>
             <div className="text-[9px] font-bold" style={{ color: getDistanceColor(front) }}>
-              {getZoneLabel(front)}
+              {getZoneBadge(front)}
             </div>
           </div>
 
@@ -176,7 +208,7 @@ export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
               Trig: <span className="text-[#ffb703]">GPIO 27</span> | Echo: <span className="text-[#ffb703]">GPIO 14</span>
             </div>
             <div className="text-[9px] font-bold" style={{ color: getDistanceColor(back) }}>
-              {getZoneLabel(back)}
+              {getZoneBadge(back)}
             </div>
           </div>
         </div>
@@ -186,9 +218,9 @@ export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
           <div className="w-full bg-[#ff3366]/15 border border-[#ff3366]/40 rounded-xl p-2.5 flex items-center gap-2.5 text-xs text-[#ff3366] animate-pulse">
             <ShieldAlert className="w-5 h-5 flex-shrink-0" />
             <div>
-              <div className="font-bold uppercase">CRITICAL HAZARD ZONE (&lt; 30cm)</div>
+              <div className="font-bold uppercase">30 – 60 cm: DANGER ZONE</div>
               <div className="text-[10px] text-white">
-                Obstacle within hexapod leg radius! ALL LEDs Red Strobe | Spoken: <em>"Critical obstacle ahead! Stopping!"</em>
+                Critical obstacle in path! ALL LEDs Red Strobe | Spoken: <em>"Warning! Critical obstacle ahead! Stopping!"</em>
               </div>
             </div>
           </div>
@@ -196,9 +228,19 @@ export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
           <div className="w-full bg-[#ffb703]/15 border border-[#ffb703]/40 rounded-xl p-2.5 flex items-center gap-2.5 text-xs text-[#ffb703]">
             <AlertTriangle className="w-5 h-5 flex-shrink-0" />
             <div>
-              <div className="font-bold uppercase">OBSTACLE CAUTION ZONE (30 - 80cm)</div>
+              <div className="font-bold uppercase">60 – 90 cm: OBSTACLE CAUTION</div>
               <div className="text-[10px] text-white">
                 Approaching obstacle! ALL LEDs Solid Amber | Spoken: <em>"Obstacle detected ahead."</em>
+              </div>
+            </div>
+          </div>
+        ) : isExcluded ? (
+          <div className="w-full bg-[#8e9bb4]/10 border border-[#8e9bb4]/30 rounded-xl p-2.5 flex items-center gap-2.5 text-xs text-[#8e9bb4]">
+            <Ban className="w-4 h-4 flex-shrink-0" />
+            <div>
+              <div className="font-bold uppercase">0 – 30 cm: LEG EXCLUSION FILTERED</div>
+              <div className="text-[10px] text-[#8e9bb4]">
+                Self-body leg reach radius (0-30cm) is filtered to prevent false positive triggers.
               </div>
             </div>
           </div>
@@ -206,7 +248,7 @@ export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
           <div className="w-full bg-[#00ff88]/10 border border-[#00ff88]/20 rounded-xl p-2.5 flex items-center gap-2.5 text-xs text-[#00ff88]">
             <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-[#00ff88]" />
             <div>
-              <div className="font-bold uppercase">SAFE TRAJECTORY (&gt; 80cm)</div>
+              <div className="font-bold uppercase">&gt; 90 cm: CLEAR TRAJECTORY</div>
               <div className="text-[10px] text-[#00ff88]/90">
                 Front & Rear clear. ALL LEDs in dynamic music beat sync.
               </div>

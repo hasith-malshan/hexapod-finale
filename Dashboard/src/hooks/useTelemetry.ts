@@ -124,6 +124,12 @@ export const useTelemetry = (mode: ConnectionMode, wsIp: string) => {
                         ...prev.imu,
                         roll: typeof raw.tilt === 'number' ? raw.tilt : prev.imu.roll,
                       },
+                      ultrasonic: {
+                        front: typeof raw.front === 'number' ? raw.front : prev.ultrasonic.front,
+                        back: typeof raw.back === 'number' ? raw.back : prev.ultrasonic.back,
+                        left: typeof raw.left === 'number' ? raw.left : prev.ultrasonic.left,
+                        right: typeof raw.right === 'number' ? raw.right : prev.ultrasonic.right,
+                      },
                       audio: {
                         ...prev.audio,
                         bpm: typeof raw.bpm === 'number' ? raw.bpm : prev.audio.bpm,
