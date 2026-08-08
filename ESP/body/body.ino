@@ -245,7 +245,8 @@ void relaxAllServos() {
 
 void sendReady() {
   activeSource = SRC_NONE; // Reset lock when ready for next command
-  Serial.println("READY");
+  Serial.println("READY (to USB)");
+  Serial2.println("READY");
   if (activeClient && activeClient.connected()) activeClient.println("READY");
 }
 
@@ -278,9 +279,9 @@ bool checkStop() {
     }
   }
   
-  // 3. Check USB Serial (Raspberry Pi Brain)
-  if (line.length() == 0 && Serial.available()) {
-    line = Serial.readStringUntil('\n'); 
+  // 3. Check UART Serial (Raspberry Pi Brain on GPIO 16/17)
+  if (line.length() == 0 && Serial2.available()) {
+    line = Serial2.readStringUntil('\n'); 
     line.trim();
     if (line.length() > 0) {
       detectedSource = SRC_SERIAL;
@@ -674,7 +675,9 @@ void danceWorm() {
 // SETUP + MAIN LOOP
 // ================================================================
 void setup() {
-  Serial.begin(115200); 
+  Serial.begin(115200); // For PC Debugging via USB
+  Serial2.begin(115200, SERIAL_8N1, 16, 17); // For Raspberry Pi UART (RX=16, TX=17)
+  
   Wire.begin();
   Wire.setClock(100000); 
   pwm1.begin(); pwm1.setPWMFreq(SERVO_FREQ); 
@@ -741,7 +744,7 @@ void loop() {
       // Single snprintf + single write to prevent TCP splitting "TILT:" and the value
       char tiltBuf[32];
       int len = snprintf(tiltBuf, sizeof(tiltBuf), "TILT:%.2f\n", tiltVal);
-      Serial.print(tiltBuf);
+      Serial2.print(tiltBuf); // Send to Pi via UART
       if (activeClient && activeClient.connected()) {
         activeClient.write((const uint8_t*)tiltBuf, len);
       }
