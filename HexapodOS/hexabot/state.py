@@ -9,6 +9,16 @@ class RobotState:
         self.audio_source = "MIC"     # "MIC" or "BT"
         self.show_audio_logs = False
 
+        # Voice Recognition & Action Config
+        self.voice_action_mode = "SPEAK_AND_ACT"  # "SPEAK_AND_ACT" or "SPEAK_ONLY"
+        self.last_voice_command = {
+            "phrase": "None yet",
+            "recognized_command": "STAND",
+            "spoken_response": "Ready",
+            "timestamp": 0.0,
+            "action_executed": False
+        }
+
         # Audio DSP State
         self.bpm = 0.0
         self.raw_bpm = 0.0

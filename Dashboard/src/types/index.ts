@@ -34,6 +34,15 @@ export interface AudioDSPData {
   isBeatDetected: boolean;
 }
 
+export interface VoiceCommandRecord {
+  phrase: string;
+  recognized_command: string;
+  spoken_response: string;
+  timestamp: number;
+  action_executed: boolean;
+  action_mode?: 'SPEAK_AND_ACT' | 'SPEAK_ONLY';
+}
+
 export interface SystemStatus {
   online: boolean;
   serialConnected: boolean;
@@ -43,6 +52,8 @@ export interface SystemStatus {
   wifiSignalDb: number;
   operatingMode: 'AUTO' | 'MANUAL';
   audioSource: 'MIC' | 'BT';
+  voiceActionMode: 'SPEAK_AND_ACT' | 'SPEAK_ONLY';
+  lastVoiceCommand?: VoiceCommandRecord;
   activeGait: 'STAND' | 'WALK_FORWARD' | 'WALK_BACKWARD' | 'TURN_LEFT' | 'TURN_RIGHT' | 'RELAX' | 'DANCE' | 'NONE';
   activeDance: string;
   plannedDance?: string;

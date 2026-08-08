@@ -3,6 +3,7 @@ import type { TelemetryFrame, LogEntry, ServoState } from '../types';
 class TempService {
   private operatingMode: 'AUTO' | 'MANUAL' = 'AUTO';
   private audioSource: 'MIC' | 'BT' = 'MIC';
+  private voiceActionMode: 'SPEAK_AND_ACT' | 'SPEAK_ONLY' = 'SPEAK_AND_ACT';
   private showAudioLogs: boolean = false;
   private manualLedPattern: string | null = null;
   private manualMood: string | null = null;
@@ -14,6 +15,14 @@ class TempService {
   private batteryLevel = 8.2;
   private bodyRoll = 0.0;
   private robotReady = true;
+  private lastVoiceCommand: TelemetryFrame['system']['lastVoiceCommand'] = {
+    phrase: 'None',
+    recognized_command: 'STAND',
+    spoken_response: 'Ready',
+    timestamp: Date.now(),
+    action_executed: false,
+    action_mode: 'SPEAK_AND_ACT',
+  };
 
   private logs: LogEntry[] = [
     { id: '1', timestamp: new Date().toLocaleTimeString(), level: 'info', message: 'TempService Initialized', source: 'DASHBOARD' },
@@ -173,6 +182,8 @@ class TempService {
         wifiSignalDb: -52 + Math.round(Math.sin(t * 0.1) * 3),
         operatingMode: this.operatingMode,
         audioSource: this.audioSource,
+        voiceActionMode: this.voiceActionMode,
+        lastVoiceCommand: this.lastVoiceCommand,
         activeGait: this.activeGait,
         activeDance: this.activeDance,
         plannedDance: this.plannedDance,
@@ -243,13 +254,67 @@ class TempService {
     this.addLog('info', `Command: "${cmd}"`, 'DASHBOARD');
 
     // Parse commands to change state
-    if (cmd.startsWith('VOICE_TRIGGER:')) {
+    if (cmd.startsWith('VOICE_MODE:')) {
+      const vm = cmd.replace('VOICE_MODE:', '') as 'SPEAK_AND_ACT' | 'SPEAK_ONLY';
+      this.voiceActionMode = vm;
+      this.addLog('success', `Voice Execution Mode: ${vm}`, 'PI');
+    } else if (cmd.startsWith('SIMULATE_VOICE:')) {
+      const phrase = cmd.replace('SIMULATE_VOICE:', '').toLowerCase();
+      let recognizedCmd = 'STAND';
+      let spokenResp = 'Stopping';
+      
+      if (phrase.includes('dance') || phrase.includes('party')) {
+        recognizedCmd = 'DANCE_CIRCLE';
+        spokenResp = "Let's Dance!";
+      } else if (phrase.includes('forward') || phrase.includes('fowrd') || phrase.includes('fwd')) {
+        recognizedCmd = 'WALK_FORWARD';
+        spokenResp = 'Walking forward';
+      } else if (phrase.includes('backward') || phrase.includes('back')) {
+        recognizedCmd = 'WALK_BACKWARD';
+        spokenResp = 'Walking backward';
+      } else if (phrase.includes('left')) {
+        recognizedCmd = 'TURN_LEFT';
+        spokenResp = 'Turning left';
+      } else if (phrase.includes('right')) {
+        recognizedCmd = 'TURN_RIGHT';
+        spokenResp = 'Turning right';
+      } else if (phrase.includes('stop') || phrase.includes('stand')) {
+        recognizedCmd = 'STAND';
+        spokenResp = 'Stopping';
+      }
+
+      const shouldAct = this.voiceActionMode === 'SPEAK_AND_ACT';
+      this.lastVoiceCommand = {
+        phrase,
+        recognized_command: recognizedCmd,
+        spoken_response: spokenResp,
+        timestamp: Date.now(),
+        action_executed: shouldAct,
+        action_mode: this.voiceActionMode
+      };
+
+      this.addLog('success', `🔊 [TTS]: "${spokenResp}"`, 'PI');
+      if (shouldAct) {
+        if (recognizedCmd.startsWith('DANCE_')) {
+          this.activeGait = 'DANCE';
+          this.activeDance = recognizedCmd.replace('DANCE_', '');
+        } else {
+          this.activeGait = recognizedCmd as any;
+          this.activeDance = 'NONE';
+        }
+        this.addLog('success', `🦾 [VOICE ACTION]: Executed ${recognizedCmd}`, 'ESP32');
+      } else {
+        this.addLog('info', `🔊 [VOICE VERIFICATION]: Action suppressed in Speak-Only mode`, 'PI');
+      }
+    } else if (cmd.startsWith('VOICE_TRIGGER:')) {
       const trigger = cmd.replace('VOICE_TRIGGER:', '');
       if (trigger === 'lets_dance') {
         this.addLog('success', "🔊 [TTS SPEAKER]: 'Let's Dance!'", 'PI');
-        this.activeGait = 'DANCE';
-        this.activeDance = 'CIRCLE';
-        this.manualMood = 'ENERGY';
+        if (this.voiceActionMode === 'SPEAK_AND_ACT') {
+          this.activeGait = 'DANCE';
+          this.activeDance = 'CIRCLE';
+          this.manualMood = 'ENERGY';
+        }
       } else if (trigger === 'voice_detected') {
         this.addLog('success', "🔊 [TTS SPEAKER]: 'Voice Detected!'", 'PI');
         this.manualMood = 'VOICE_ACTIVE';
@@ -257,18 +322,26 @@ class TempService {
         this.addLog('success', "🔊 [TTS SPEAKER]: 'Activating command!'", 'PI');
       } else if (trigger === 'party_mode') {
         this.addLog('success', "🔊 [TTS SPEAKER]: 'Party mode engaged!'", 'PI');
-        this.activeGait = 'DANCE';
-        this.activeDance = 'ROLL_FAST';
+        if (this.voiceActionMode === 'SPEAK_AND_ACT') {
+          this.activeGait = 'DANCE';
+          this.activeDance = 'ROLL_FAST';
+        }
       } else if (trigger === 'stopping') {
         this.addLog('success', "🔊 [TTS SPEAKER]: 'Stopping!'", 'PI');
-        this.activeGait = 'STAND';
-        this.activeDance = 'NONE';
+        if (this.voiceActionMode === 'SPEAK_AND_ACT') {
+          this.activeGait = 'STAND';
+          this.activeDance = 'NONE';
+        }
       } else if (trigger === 'walking_forward') {
         this.addLog('success', "🔊 [TTS SPEAKER]: 'Walking forward!'", 'PI');
-        this.activeGait = 'WALK_FORWARD';
+        if (this.voiceActionMode === 'SPEAK_AND_ACT') {
+          this.activeGait = 'WALK_FORWARD';
+        }
       } else if (trigger === 'walking_backward') {
         this.addLog('success', "🔊 [TTS SPEAKER]: 'Walking backward!'", 'PI');
-        this.activeGait = 'WALK_BACKWARD';
+        if (this.voiceActionMode === 'SPEAK_AND_ACT') {
+          this.activeGait = 'WALK_BACKWARD';
+        }
       }
     } else if (cmd.startsWith('SPEAK:')) {
       const phrase = cmd.replace('SPEAK:', '');

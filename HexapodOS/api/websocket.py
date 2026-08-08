@@ -47,6 +47,8 @@ class ConnectionManager:
                             "peak_amplitude": getattr(state, "peak_amplitude", 0.0),
                             "syllable_count": getattr(state, "syllable_count", 0),
                             "voice_active": getattr(state, "voice_active", False),
+                            "voice_action_mode": getattr(state, "voice_action_mode", "SPEAK_AND_ACT"),
+                            "last_voice_command": getattr(state, "last_voice_command", {}),
                             "manual_led_pattern": getattr(state, "manual_led_pattern", None),
                             "manual_mood": getattr(state, "manual_mood", None),
                             "show_audio_logs": getattr(state, "show_audio_logs", False),

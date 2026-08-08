@@ -70,7 +70,6 @@ def say_phrase_offline(text: str):
     1. Tries pyttsx3
     2. Falls back to spd-say
     3. Falls back to espeak / espeak-ng
-    4. Falls back to pico2wave
     """
     def speak():
         played = False
@@ -106,72 +105,96 @@ def say_phrase_offline(text: str):
                 except Exception:
                     pass
 
-        log_event(f"🔊 [AUDIO OUTPUT]: '{text}' (Success: {played})")
+        log_event(f"🔊 [AUDIO SPEAKER]: '{text}' (Played: {played})")
 
     threading.Thread(target=speak, daemon=True).start()
 
-def trigger_voice_action(action: str):
+def match_and_execute_voice_command(raw_text: str):
     """
-    Triggers specific requested voice output presets + corresponding robot response:
-    - lets_dance: Speaks 'Let's Dance!', dispatches dynamic dance, sets hype mood
-    - voice_detected: Speaks 'Voice Detected!', activates green eye mode
-    - activating_command: Speaks 'Activating command!', confirms action
-    - stopping: Speaks 'Stopping', sets Stand pose
-    - party_mode: Speaks 'Party mode engaged!', dispatches fast roll dance
-    - walking_forward: Speaks 'Walking forward', executes forward walk
-    - walking_backward: Speaks 'Walking backward', executes backward walk
-    """
-    action_key = action.lower().strip()
+    Core speech-to-action parser for the predefined commands:
+    1. lets dance     -> Speaks 'Let's Dance!' -> DANCE_CIRCLE
+    2. walk forward   -> Speaks 'Walking forward' -> WALK_FORWARD
+    3. walk backward  -> Speaks 'Walking backward' -> WALK_BACKWARD
+    4. turn left      -> Speaks 'Turning left' -> TURN_LEFT
+    5. turn right     -> Speaks 'Turning right' -> TURN_RIGHT
+    6. stop           -> Speaks 'Stopping' -> STAND
     
-    if action_key in ("lets_dance", "dance", "lets dance"):
-        phrase = "Let's Dance!"
-        say_phrase_offline(phrase)
-        with state.lock:
-            state.mood = "ENERGY"
-        send_to_esp32("DANCE_CIRCLE")
-        return {"status": "success", "phrase": phrase, "action": "DANCE_CIRCLE"}
+    Respects state.voice_action_mode:
+    - 'SPEAK_AND_ACT': Speaks phrase AND sends move to ESP32
+    - 'SPEAK_ONLY': Speaks phrase only (zero servo movement, safe test mode)
+    """
+    text = raw_text.lower().strip()
+    command = None
+    spoken_phrase = None
+    
+    # 1. Let's Dance
+    if any(k in text for k in ("lets dance", "let's dance", "dance", "party")):
+        command = "DANCE_CIRCLE"
+        spoken_phrase = "Let's Dance!"
 
-    elif action_key in ("voice_detected", "voice detected", "listen"):
-        phrase = "Voice Detected!"
-        say_phrase_offline(phrase)
-        with state.lock:
-            state.manual_mood = "VOICE_ACTIVE"
-            state.voice_active = True
-        return {"status": "success", "phrase": phrase, "action": "VOICE_ACTIVE"}
+    # 2. Walk Forward
+    elif any(k in text for k in ("walk forward", "walk fowrd", "walk fwd", "forward", "front", "fwd", "ahead")):
+        command = "WALK_FORWARD"
+        spoken_phrase = "Walking forward"
 
-    elif action_key in ("activating_command", "activating command", "command"):
-        phrase = "Activating command!"
-        say_phrase_offline(phrase)
-        return {"status": "success", "phrase": phrase, "action": "COMMAND_CONFIRM"}
+    # 3. Walk Backward
+    elif any(k in text for k in ("walk backward", "walk back", "backward", "back", "reverse")):
+        command = "WALK_BACKWARD"
+        spoken_phrase = "Walking backward"
 
-    elif action_key in ("stopping", "stop", "stand"):
-        phrase = "Stopping!"
-        say_phrase_offline(phrase)
-        send_to_esp32("STAND")
-        return {"status": "success", "phrase": phrase, "action": "STAND"}
+    # 4. Turn Left
+    elif any(k in text for k in ("turn left", "rotate left", "left")):
+        command = "TURN_LEFT"
+        spoken_phrase = "Turning left"
 
-    elif action_key in ("party_mode", "party", "party mode"):
-        phrase = "Party mode engaged!"
-        say_phrase_offline(phrase)
-        send_to_esp32("DANCE_ROLL_FAST")
-        return {"status": "success", "phrase": phrase, "action": "DANCE_ROLL_FAST"}
+    # 5. Turn Right
+    elif any(k in text for k in ("turn right", "rotate right", "right")):
+        command = "TURN_RIGHT"
+        spoken_phrase = "Turning right"
 
-    elif action_key in ("walking_forward", "forward"):
-        phrase = "Walking forward!"
-        say_phrase_offline(phrase)
-        send_to_esp32("WALK_FORWARD")
-        return {"status": "success", "phrase": phrase, "action": "WALK_FORWARD"}
+    # 6. Stop
+    elif any(k in text for k in ("stop", "stand", "halt", "freeze", "relax")):
+        command = "STAND"
+        spoken_phrase = "Stopping"
 
-    elif action_key in ("walking_backward", "backward", "back"):
-        phrase = "Walking backward!"
-        say_phrase_offline(phrase)
-        send_to_esp32("WALK_BACKWARD")
-        return {"status": "success", "phrase": phrase, "action": "WALK_BACKWARD"}
-
+    # Fallback / General unrecognized voice
     else:
-        # Generic speak
-        say_phrase_offline(action)
-        return {"status": "success", "phrase": action, "action": "CUSTOM_TTS"}
+        spoken_phrase = f"Recognized: {raw_text}"
+        command = None
+
+    with state.lock:
+        action_mode = state.voice_action_mode  # "SPEAK_AND_ACT" or "SPEAK_ONLY"
+        should_act = (action_mode == "SPEAK_AND_ACT") and (command is not None)
+        
+        state.last_voice_command = {
+            "phrase": raw_text,
+            "recognized_command": command or "NONE",
+            "spoken_response": spoken_phrase,
+            "timestamp": time.time(),
+            "action_executed": should_act,
+            "action_mode": action_mode
+        }
+        state.command_detected_time = time.time()
+        state.voice_override_until = time.monotonic() + 15.0
+
+    # Output 1: Always speak the detected voice confirmation over the speaker
+    say_phrase_offline(spoken_phrase)
+
+    # Output 2: Conditionally dispatch the physical robot action based on selected mode
+    if should_act and command:
+        send_to_esp32(command)
+        log_event(f"🦾 [VOICE ACTION]: Executed '{command}' | Spoken: '{spoken_phrase}' (Mode: {action_mode})")
+    else:
+        log_event(f"🔊 [VOICE VERIFICATION]: Spoke '{spoken_phrase}' | Action suppressed (Mode: {action_mode})")
+
+    return {
+        "status": "success",
+        "input_phrase": raw_text,
+        "spoken_response": spoken_phrase,
+        "command": command,
+        "action_executed": should_act,
+        "mode": action_mode
+    }
 
 def process_voice_command(audio_bytes: bytes):
     if recognizer is None:
@@ -179,30 +202,14 @@ def process_voice_command(audio_bytes: bytes):
         return
     try:
         text = recognizer.recognize_google(sr.AudioData(audio_bytes, RATE, 2), language="en-US").lower()
-        log_event(f"🎤 [VOICE RECOGNIZED]: '{text}'")
-        command, phrase = None, None
-
-        if "stop" in text or "stand" in text:
-            command, phrase = "STAND", "stopping"
-        elif "forward" in text:
-            command, phrase = "WALK_FORWARD", "walking forward"
-        elif "back" in text:
-            command, phrase = "WALK_BACKWARD", "walking backward"
-        elif "dance" in text or "party" in text:
-            command, phrase = "DANCE_CIRCLE", "let's dance"
-        elif "slow" in text or "relax" in text:
-            command, phrase = "DANCE_CHASSIS_BREATHE", "slow mode"
-        elif "fast" in text or "speed" in text:
-            command, phrase = "DANCE_ROLL_FAST", "high speed"
-
-        if command:
-            send_to_esp32(command)
-            say_phrase_offline(phrase)
-            with state.lock:
-                state.command_detected_time = time.time()
-                state.voice_override_until = time.monotonic() + 15.0
-    except Exception:
-        pass
+        log_event(f"🎤 [VOICE RECOGNIZED FROM MIC]: '{text}'")
+        match_and_execute_voice_command(text)
+    except Exception as e:
+        log_event(f"ℹ️ Speech recognition note: {e}")
     finally:
         with state.lock:
             state.voice_active = False
+
+def trigger_voice_action(action: str):
+    """Triggers voice actions from API or UI."""
+    return match_and_execute_voice_command(action)

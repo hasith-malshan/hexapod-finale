@@ -33,6 +33,14 @@ const initialTelemetry: TelemetryFrame = {
     wifiSignalDb: -100,
     operatingMode: 'AUTO',
     audioSource: 'MIC',
+    voiceActionMode: 'SPEAK_AND_ACT',
+    lastVoiceCommand: {
+      phrase: 'None',
+      recognized_command: 'STAND',
+      spoken_response: 'Ready',
+      timestamp: 0,
+      action_executed: false,
+    },
     activeGait: 'STAND',
     activeDance: 'NONE',
     speedMultiplier: 1.0,
@@ -137,6 +145,8 @@ export const useTelemetry = (mode: ConnectionMode, wsIp: string) => {
                         serialConnected: true,
                         operatingMode: (raw.mode === 'MANUAL' ? 'MANUAL' : 'AUTO'),
                         audioSource: (raw.audio_source === 'BT' ? 'BT' : 'MIC'),
+                        voiceActionMode: raw.voice_action_mode || prev.system.voiceActionMode,
+                        lastVoiceCommand: raw.last_voice_command || prev.system.lastVoiceCommand,
                         activeDance: raw.current_move || prev.system.activeDance,
                         plannedDance: raw.planned_move || prev.system.plannedDance,
                         manualLedPattern: raw.manual_led_pattern,
@@ -224,6 +234,15 @@ export const useTelemetry = (mode: ConnectionMode, wsIp: string) => {
       if (cmd.startsWith('MODE:')) {
         const m = cmd.split(':')[1];
         await fetch(`${baseUrl}/mode?mode=${m}`, { method: 'POST' });
+      } else if (cmd.startsWith('VOICE_MODE:')) {
+        const vm = cmd.split(':')[1];
+        await fetch(`${baseUrl}/audio/voice-mode?mode=${vm}`, { method: 'POST' });
+        addLocalLog('success', `Voice Execution Mode: ${vm}`);
+      } else if (cmd.startsWith('SIMULATE_VOICE:')) {
+        const phrase = cmd.replace('SIMULATE_VOICE:', '');
+        const resp = await fetch(`${baseUrl}/audio/simulate-voice?phrase=${encodeURIComponent(phrase)}`, { method: 'POST' });
+        const data = await resp.json();
+        addLocalLog('success', `Simulated Voice: "${phrase}" -> Spoke: "${data.spoken_response}" (Acted: ${data.action_executed})`);
       } else if (cmd.startsWith('LED:')) {
         const pattern = cmd.split(':')[1];
         if (pattern === 'AUTO') {

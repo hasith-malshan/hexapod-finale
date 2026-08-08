@@ -6,7 +6,8 @@ from hexabot import (
     set_led_pattern, reset_led_auto,
     set_emotion, reset_emotion_auto, run_emotion_test,
     set_audio_source, toggle_logging, get_mic_snapshot,
-    set_system_volume, say_phrase_offline, trigger_voice_action
+    set_system_volume, set_voice_action_mode, get_last_voice_command,
+    say_phrase_offline, trigger_voice_action, match_and_execute_voice_command
 )
 
 router = APIRouter()
@@ -16,6 +17,9 @@ class SpeakRequest(BaseModel):
 
 class VoiceTriggerRequest(BaseModel):
     action: str
+
+class SimulateVoiceRequest(BaseModel):
+    phrase: str
 
 @router.get("/status")
 def get_status():
@@ -30,6 +34,8 @@ def get_status():
             "genre": getattr(state, "genre", "UNKNOWN"),
             "context": getattr(state, "audio_context", "UNKNOWN"),
             "voice_active": getattr(state, "voice_active", False),
+            "voice_action_mode": getattr(state, "voice_action_mode", "SPEAK_AND_ACT"),
+            "last_voice_command": getattr(state, "last_voice_command", {}),
             "current_move": getattr(state, "current_move", "STAND"),
             "planned_move": getattr(state, "planned_move", None),
             "rms_db": getattr(state, "rms_db", 0.0),
@@ -121,9 +127,39 @@ def mic_verify():
         "bpm": snap.get("bpm", 0),
         "audio_context": snap.get("audio_context", "Unknown"),
         "audio_source": snap.get("audio_source", "MIC"),
+        "voice_action_mode": snap.get("voice_action_mode", "SPEAK_AND_ACT"),
+        "last_voice_command": snap.get("last_voice_command", {}),
         "healthy": is_live or rms > -65.0,
         "message": "Microphone active & capturing stream" if is_live else "Microphone ready (room quiet)",
     }
+
+@router.post("/audio/voice-mode")
+def voice_mode_endpoint(mode: str = Query("SPEAK_AND_ACT")):
+    """
+    Sets how voice commands behave:
+    - 'SPEAK_AND_ACT': Speaks confirmation + executes physical robot movement
+    - 'SPEAK_ONLY': Speaks confirmation only (zero leg movement, safe verification mode)
+    """
+    val = set_voice_action_mode(mode)
+    return {"status": "success", "voice_action_mode": val}
+
+@router.get("/audio/last-voice")
+def last_voice_endpoint():
+    """Returns the last recognized voice command and speech verification."""
+    return get_last_voice_command()
+
+@router.post("/audio/simulate-voice")
+def simulate_voice_endpoint(phrase: Optional[str] = Query(None), req: Optional[SimulateVoiceRequest] = None):
+    """
+    Simulates speech input to verify speech matching and audio response:
+    e.g. phrase='lets dance', 'walk forward', 'walk backward', 'turn left', 'turn right', 'stop'
+    """
+    text_to_sim = (req.phrase if req and req.phrase else phrase)
+    if not text_to_sim:
+        raise HTTPException(status_code=400, detail="Phrase required.")
+    
+    res = match_and_execute_voice_command(text_to_sim)
+    return res
 
 @router.post("/audio/volume")
 def set_volume(percent: int = Query(100, ge=0, le=100)):
@@ -149,13 +185,7 @@ def speak_phrase(phrase: Optional[str] = Query(None), req: Optional[SpeakRequest
 
 @router.post("/audio/trigger")
 def voice_trigger(action: Optional[str] = Query(None), req: Optional[VoiceTriggerRequest] = None):
-    """
-    Triggers one of the requested voice lines:
-    - 'lets_dance' -> Speaks 'Let's Dance!' and dispatches dance
-    - 'voice_detected' -> Speaks 'Voice Detected!' and activates listening eyes
-    - 'activating_command' -> Speaks 'Activating command!'
-    - 'stopping', 'party_mode', 'walking_forward', 'walking_backward'
-    """
+    """Triggers specific predefined voice actions and speech confirmation."""
     action_key = (req.action if req and req.action else action)
     if not action_key:
         raise HTTPException(status_code=400, detail="Action required.")

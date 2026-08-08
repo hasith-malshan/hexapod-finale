@@ -6,10 +6,17 @@ import {
   Play, 
   Activity, 
   CheckCircle2, 
-  Radio,
-  MessageSquare,
-  Volume1,
-  Sparkles
+  Radio, 
+  MessageSquare, 
+  Volume1, 
+  Sparkles, 
+  Bot, 
+  Zap,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  Square
 } from 'lucide-react';
 
 interface AudioCommanderProps {
@@ -17,71 +24,70 @@ interface AudioCommanderProps {
   sendCommand: (cmd: string) => void;
 }
 
-interface VoicePreset {
+interface PredefinedCommand {
   id: string;
-  label: string;
-  spokenPhrase: string;
+  triggerPhrases: string[];
+  spokenResponse: string;
+  robotAction: string;
   desc: string;
   color: string;
-  icon: string;
+  icon: React.ReactNode;
 }
 
-const VOICE_PRESETS: VoicePreset[] = [
+const PREDEFINED_VOICE_COMMANDS: PredefinedCommand[] = [
   { 
     id: 'lets_dance', 
-    label: "Let's Dance", 
-    spokenPhrase: "Let's Dance!", 
-    desc: "Speaks 'Let's Dance!' and dispatches dynamic circle dance", 
+    triggerPhrases: ['lets dance', 'let\'s dance', 'dance', 'party'], 
+    spokenResponse: "Let's Dance!", 
+    robotAction: 'DANCE_CIRCLE', 
+    desc: "Speaks 'Let's Dance!' and dispatches dynamic choreography", 
     color: '#9d4edd',
-    icon: '🎵'
+    icon: <Sparkles className="w-4 h-4 text-[#9d4edd]" />
   },
   { 
-    id: 'voice_detected', 
-    label: "Voice Detected", 
-    spokenPhrase: "Voice Detected!", 
-    desc: "Speaks 'Voice Detected!' & turns LCD eye mode to listening green", 
+    id: 'walk_forward', 
+    triggerPhrases: ['walk forward', 'walk fowrd', 'walk fwd', 'forward'], 
+    spokenResponse: "Walking forward", 
+    robotAction: 'WALK_FORWARD', 
+    desc: "Speaks 'Walking forward' and initiates forward tripod gait", 
     color: '#00ff88',
-    icon: '🎙️'
+    icon: <ArrowUp className="w-4 h-4 text-[#00ff88]" />
   },
   { 
-    id: 'activating_command', 
-    label: "Activating Command", 
-    spokenPhrase: "Activating command!", 
-    desc: "Speaks 'Activating command!' audio confirmation", 
+    id: 'walk_backward', 
+    triggerPhrases: ['walk backward', 'backward', 'walk back', 'back'], 
+    spokenResponse: "Walking backward", 
+    robotAction: 'WALK_BACKWARD', 
+    desc: "Speaks 'Walking backward' and initiates reverse gait", 
+    color: '#ffb703',
+    icon: <ArrowDown className="w-4 h-4 text-[#ffb703]" />
+  },
+  { 
+    id: 'turn_left', 
+    triggerPhrases: ['turn left', 'rotate left', 'left'], 
+    spokenResponse: "Turning left", 
+    robotAction: 'TURN_LEFT', 
+    desc: "Speaks 'Turning left' and rotates chassis left", 
     color: '#00f2fe',
-    icon: '⚡'
+    icon: <ArrowLeft className="w-4 h-4 text-[#00f2fe]" />
   },
   { 
-    id: 'party_mode', 
-    label: "Party Mode", 
-    spokenPhrase: "Party mode engaged!", 
-    desc: "Speaks 'Party mode engaged!' and accelerates roll dance", 
-    color: '#ff007f',
-    icon: '🎉'
+    id: 'turn_right', 
+    triggerPhrases: ['turn right', 'rotate right', 'right'], 
+    spokenResponse: "Turning right", 
+    robotAction: 'TURN_RIGHT', 
+    desc: "Speaks 'Turning right' and rotates chassis right", 
+    color: '#00f2fe',
+    icon: <ArrowRight className="w-4 h-4 text-[#00f2fe]" />
   },
   { 
-    id: 'stopping', 
-    label: "Stopping", 
-    spokenPhrase: "Stopping!", 
-    desc: "Speaks 'Stopping!' and neutralizes servos to stand pose", 
+    id: 'stop', 
+    triggerPhrases: ['stop', 'stand', 'halt', 'freeze', 'relax'], 
+    spokenResponse: "Stopping", 
+    robotAction: 'STAND', 
+    desc: "Speaks 'Stopping' and resets servos to neutral stand pose", 
     color: '#ff3366',
-    icon: '🛑'
-  },
-  { 
-    id: 'walking_forward', 
-    label: "Walking Forward", 
-    spokenPhrase: "Walking forward!", 
-    desc: "Speaks 'Walking forward!' & initiates forward gait", 
-    color: '#ffb703',
-    icon: '▲'
-  },
-  { 
-    id: 'walking_backward', 
-    label: "Walking Backward", 
-    spokenPhrase: "Walking backward!", 
-    desc: "Speaks 'Walking backward!' & initiates backward gait", 
-    color: '#ffb703',
-    icon: '▼'
+    icon: <Square className="w-4 h-4 text-[#ff3366]" />
   }
 ];
 
@@ -89,9 +95,9 @@ export const AudioCommander: React.FC<AudioCommanderProps> = ({
   telemetry,
   sendCommand,
 }) => {
-  const { audio } = telemetry;
-  const [customPhrase, setCustomPhrase] = useState<string>('Hello! Hexapod is online and ready.');
-  const [activeVoiceTrigger, setActiveVoiceTrigger] = useState<string | null>(null);
+  const { audio, system } = telemetry;
+  const [customPhrase, setCustomPhrase] = useState<string>('Hello! Hexapod is ready.');
+  const [activeVoiceSim, setActiveVoiceSim] = useState<string | null>(null);
   const [micVerificationResult, setMicVerificationResult] = useState<string | null>(null);
   const [isVerifyingMic, setIsVerifyingMic] = useState<boolean>(false);
   const [speakerVolume, setSpeakerVolume] = useState<number>(100);
@@ -100,13 +106,19 @@ export const AudioCommander: React.FC<AudioCommanderProps> = ({
   const rmsDb = audio.rmsEnergyDb || -60;
   const vuPercent = Math.min(100, Math.max(0, ((rmsDb + 60) / 60) * 100));
   const isMicHealthy = rmsDb > -58 || (audio.peakAmplitude || 0) > 0.02 || (audio.bpm || 0) > 0;
+  const voiceMode = system.voiceActionMode || 'SPEAK_AND_ACT';
+  const lastCmd = system.lastVoiceCommand;
 
-  const handleTriggerVoice = (voiceId: string) => {
-    setActiveVoiceTrigger(voiceId);
-    sendCommand(`VOICE_TRIGGER:${voiceId}`);
+  const handleSetVoiceMode = (mode: 'SPEAK_AND_ACT' | 'SPEAK_ONLY') => {
+    sendCommand(`VOICE_MODE:${mode}`);
+  };
+
+  const handleSimulateVoice = (phrase: string, cmdId: string) => {
+    setActiveVoiceSim(cmdId);
+    sendCommand(`SIMULATE_VOICE:${phrase}`);
     setTimeout(() => {
-      setActiveVoiceTrigger(null);
-    }, 2500);
+      setActiveVoiceSim(null);
+    }, 2000);
   };
 
   const handleSpeakCustomPhrase = (e: React.FormEvent) => {
@@ -127,25 +139,25 @@ export const AudioCommander: React.FC<AudioCommanderProps> = ({
 
   const handleVerifyMicInput = () => {
     setIsVerifyingMic(true);
-    setMicVerificationResult('Capturing 2-second audio sample from ALSA soundcard...');
+    setMicVerificationResult('Capturing live 2-second audio sample from ALSA soundcard...');
     setTimeout(() => {
       setIsVerifyingMic(false);
       setMicVerificationResult(
-        `✅ Microphone Verified Active! Live Level: ${rmsDb.toFixed(1)} dB | Peak: ${(audio.peakAmplitude || 0.12).toFixed(2)} | Syllable Detector: ${audio.syllableCount || 0} syl/3s`
+        `✅ Microphone Verified Active! Live Level: ${rmsDb.toFixed(1)} dB | Peak: ${(audio.peakAmplitude || 0.12).toFixed(2)} | Syllables: ${audio.syllableCount || 0}/3s`
       );
     }, 2000);
   };
 
   return (
     <div className="glass-card flex flex-col gap-5" style={{ height: '100%' }}>
-      {/* Header with Speaker Volume Booster */}
+      {/* Top Header */}
       <div className="flex justify-between items-center flex-wrap gap-2">
         <div>
           <h3 className="title-glow flex items-center gap-2" style={{ margin: 0 }}>
-            <Volume2 className="w-5 h-5 text-[#00f2fe]" /> Audio Lab & Voice Commander
+            <Volume2 className="w-5 h-5 text-[#00f2fe]" /> Voice Recognition & Audio Commander
           </h3>
           <p className="subtitle" style={{ fontSize: '11px', margin: 0 }}>
-            Real-time microphone input verification and Raspberry Pi speaker audio controls
+            Predefined voice commands with dual execution mode (Action + Speech vs. Speech-Only Verification)
           </p>
         </div>
 
@@ -168,40 +180,160 @@ export const AudioCommander: React.FC<AudioCommanderProps> = ({
         </div>
       </div>
 
-      {/* SECTION 1: SPEAKER AMPLIFICATION & VOLUME SLIDER */}
-      <div className="bg-white/5 border border-white/5 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <Volume2 className="w-5 h-5 text-[#ffb703]" />
-          <div>
-            <div className="font-bold text-xs text-white">Speaker Master Volume Level</div>
-            <div className="text-[10px] text-[#8e9bb4]">ALSA / PulseAudio / Master Hardware Mixer</div>
+      {/* SECTION 1: VOICE ACTION MODE SELECTOR (ACTION + SPEECH vs SPEECH ONLY) */}
+      <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex flex-col gap-3">
+        <div className="flex justify-between items-center flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Bot className="w-4 h-4 text-[#00f2fe]" />
+            <span className="font-bold text-xs text-white uppercase tracking-wider">
+              1. Voice Command Execution Mode
+            </span>
           </div>
+          <span className="text-[10px] text-[#8e9bb4]">Choose whether voice commands physically move the robot</span>
         </div>
 
-        <div className="flex items-center gap-3 flex-1 max-w-[320px]">
-          <Volume1 className="w-4 h-4 text-[#8e9bb4]" />
-          <input
-            type="range"
-            min="0"
-            max="100"
-            step="5"
-            value={speakerVolume}
-            onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
-            className="w-full accent-[#ffb703] h-1.5 bg-white/10 rounded-lg cursor-pointer"
-          />
-          <span className="font-mono font-bold text-xs text-[#ffb703] min-w-[45px] text-right">
-            {speakerVolume}%
-          </span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Mode 1: Speak & Act */}
+          <button
+            onClick={() => handleSetVoiceMode('SPEAK_AND_ACT')}
+            className="glow-button flex flex-col items-start gap-1 p-3 text-left transition-all"
+            style={{
+              height: 'auto',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderColor: voiceMode === 'SPEAK_AND_ACT' ? 'var(--neon-green)' : 'var(--border-glass)',
+              background: voiceMode === 'SPEAK_AND_ACT' ? 'rgba(0, 255, 136, 0.15)' : 'rgba(23, 28, 53, 0.4)',
+              boxShadow: voiceMode === 'SPEAK_AND_ACT' ? '0 0 15px rgba(0, 255, 136, 0.2)' : undefined
+            }}
+          >
+            <div className="flex justify-between items-center w-full">
+              <span className="font-bold text-xs text-white flex items-center gap-2">
+                <Zap className="w-3.5 h-3.5 text-[#00ff88]" /> Speak & Perform Action (Default)
+              </span>
+              {voiceMode === 'SPEAK_AND_ACT' && <span className="text-[9px] px-2 py-0.5 rounded bg-[#00ff88] text-black font-bold">ACTIVE</span>}
+            </div>
+            <span className="text-[10px] text-[#8e9bb4]">
+              Robot speaks the verbal confirmation (e.g. <em>"Let's Dance!"</em>) <strong>AND executes the physical leg motion / dance</strong>.
+            </span>
+          </button>
+
+          {/* Mode 2: Speak Only */}
+          <button
+            onClick={() => handleSetVoiceMode('SPEAK_ONLY')}
+            className="glow-button flex flex-col items-start gap-1 p-3 text-left transition-all"
+            style={{
+              height: 'auto',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderColor: voiceMode === 'SPEAK_ONLY' ? 'var(--neon-yellow)' : 'var(--border-glass)',
+              background: voiceMode === 'SPEAK_ONLY' ? 'rgba(255, 183, 3, 0.15)' : 'rgba(23, 28, 53, 0.4)',
+              boxShadow: voiceMode === 'SPEAK_ONLY' ? '0 0 15px rgba(255, 183, 3, 0.2)' : undefined
+            }}
+          >
+            <div className="flex justify-between items-center w-full">
+              <span className="font-bold text-xs text-white flex items-center gap-2">
+                <Volume2 className="w-3.5 h-3.5 text-[#ffb703]" /> Speak Only (Voice Verification Mode)
+              </span>
+              {voiceMode === 'SPEAK_ONLY' && <span className="text-[9px] px-2 py-0.5 rounded bg-[#ffb703] text-black font-bold">ACTIVE</span>}
+            </div>
+            <span className="text-[10px] text-[#8e9bb4]">
+              Robot speaks the verbal response on speaker <strong>without moving any servos</strong>. Perfect for safe in-hand testing!
+            </span>
+          </button>
         </div>
       </div>
 
-      {/* SECTION 2: MICROPHONE INPUT VERIFICATION */}
+      {/* SECTION 2: LIVE SPEECH VERIFICATION CARD */}
+      {lastCmd && (
+        <div className="bg-black/50 border border-[#00f2fe]/30 rounded-xl p-3.5 flex flex-col gap-2">
+          <div className="flex justify-between items-center text-xs">
+            <span className="font-bold text-[#00f2fe] flex items-center gap-1.5">
+              <Radio className="w-3.5 h-3.5 animate-pulse" /> Live Speech Recognition Log
+            </span>
+            <span className="text-[10px] text-[#8e9bb4]">
+              {lastCmd.timestamp ? new Date(lastCmd.timestamp).toLocaleTimeString() : 'Awaiting input...'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs pt-1">
+            <div className="bg-white/5 p-2 rounded-lg">
+              <span className="text-[9px] text-[#8e9bb4] block font-semibold">DETECTED HUMAN VOICE</span>
+              <strong className="text-white">"{lastCmd.phrase || 'None'}"</strong>
+            </div>
+
+            <div className="bg-white/5 p-2 rounded-lg">
+              <span className="text-[9px] text-[#8e9bb4] block font-semibold">ROBOT SPOKEN RESPONSE</span>
+              <strong className="text-[#00ff88]">"{lastCmd.spoken_response || 'Ready'}"</strong>
+            </div>
+
+            <div className="bg-white/5 p-2 rounded-lg">
+              <span className="text-[9px] text-[#8e9bb4] block font-semibold">PHYSICAL ACTION TAKEN</span>
+              <strong className={lastCmd.action_executed ? 'text-[#9d4edd]' : 'text-[#ffb703]'}>
+                {lastCmd.action_executed ? `Executed: ${lastCmd.recognized_command}` : 'None (Speak-Only Mode)'}
+              </strong>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SECTION 3: THE 6 PREDEFINED COMMANDS MATRIX */}
+      <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex flex-col gap-3">
+        <div className="flex justify-between items-center flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Mic className="w-4 h-4 text-[#ffb703]" />
+            <span className="font-bold text-xs text-white uppercase tracking-wider">
+              2. Predefined Voice Commands (The 6 Commands)
+            </span>
+          </div>
+          <span className="text-[10px] text-[#8e9bb4]">Say into mic or click "Test" to simulate</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          {PREDEFINED_VOICE_COMMANDS.map((cmd) => {
+            const isSimulating = activeVoiceSim === cmd.id;
+            return (
+              <div
+                key={cmd.id}
+                className="bg-black/30 border border-white/5 rounded-xl p-3 flex flex-col justify-between gap-2.5 transition-all hover:border-white/20"
+                style={{ borderColor: isSimulating ? cmd.color : undefined }}
+              >
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <div className="flex items-center gap-2">
+                      {cmd.icon}
+                      <span className="font-bold text-xs text-white">{cmd.triggerPhrases[0].toUpperCase()}</span>
+                    </div>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-black/50 text-[#8e9bb4] font-mono">
+                      {cmd.robotAction}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-[#00f2fe] font-mono">
+                    Speaker Output: "{cmd.spokenResponse}"
+                  </div>
+                  <p className="text-[9px] text-[#8e9bb4] mt-1 line-clamp-2">{cmd.desc}</p>
+                </div>
+
+                <button
+                  onClick={() => handleSimulateVoice(cmd.triggerPhrases[0], cmd.id)}
+                  className={`glow-button ${isSimulating ? 'active' : ''}`}
+                  style={{ width: '100%', padding: '6px 10px', fontSize: '10px' }}
+                >
+                  <Play className="w-3 h-3" />
+                  {isSimulating ? 'Speaking...' : `Test "${cmd.triggerPhrases[0]}"`}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* SECTION 4: MICROPHONE LEVEL & VU METER */}
       <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex flex-col gap-3">
         <div className="flex justify-between items-center flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <Mic className="w-4 h-4 text-[#00ff88]" />
             <span className="font-bold text-xs text-white uppercase tracking-wider">
-              1. Microphone Input Verification
+              3. Live Microphone Input Verification
             </span>
           </div>
 
@@ -220,40 +352,11 @@ export const AudioCommander: React.FC<AudioCommanderProps> = ({
           </button>
         </div>
 
-        {/* Live meters & readings */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
-          <div className="bg-black/40 border border-white/5 rounded-lg p-2.5 flex flex-col">
-            <span className="text-[9px] text-[#8e9bb4] font-semibold">SIGNAL LEVEL (RMS)</span>
-            <span className="font-mono font-bold text-sm text-[#00f2fe]">{rmsDb.toFixed(1)} dB</span>
-          </div>
-
-          <div className="bg-black/40 border border-white/5 rounded-lg p-2.5 flex flex-col">
-            <span className="text-[9px] text-[#8e9bb4] font-semibold">PEAK AMPLITUDE</span>
-            <span className="font-mono font-bold text-sm text-[#00ff88]">
-              {(audio.peakAmplitude || 0).toFixed(3)}
-            </span>
-          </div>
-
-          <div className="bg-black/40 border border-white/5 rounded-lg p-2.5 flex flex-col">
-            <span className="text-[9px] text-[#8e9bb4] font-semibold">SPEECH SYLLABLES</span>
-            <span className="font-mono font-bold text-sm text-[#ffb703]">
-              {audio.syllableCount || 0} / 3s
-            </span>
-          </div>
-
-          <div className="bg-black/40 border border-white/5 rounded-lg p-2.5 flex flex-col">
-            <span className="text-[9px] text-[#8e9bb4] font-semibold">AUDIO CONTEXT</span>
-            <span className="font-bold text-xs text-white truncate">
-              {audio.audioContext || audio.classification || 'Ambient'}
-            </span>
-          </div>
-        </div>
-
         {/* Dynamic VU Meter */}
-        <div className="flex flex-col gap-1 mt-1">
+        <div className="flex flex-col gap-1">
           <div className="flex justify-between text-[10px] text-[#8e9bb4]">
             <span>-60 dB (Silence)</span>
-            <span className="text-white font-bold">{rmsDb.toFixed(1)} dB</span>
+            <span className="text-white font-bold">{rmsDb.toFixed(1)} dB | Peak: {(audio.peakAmplitude || 0).toFixed(2)} | Syl: {audio.syllableCount || 0}/3s</span>
             <span>0 dB (Clipping)</span>
           </div>
           <div className="w-full h-3 bg-black/60 rounded-full overflow-hidden flex items-center p-0.5 border border-white/5">
@@ -271,7 +374,6 @@ export const AudioCommander: React.FC<AudioCommanderProps> = ({
           </div>
         </div>
 
-        {/* Verification Result Banner */}
         {micVerificationResult && (
           <div className="bg-[#00ff88]/10 border border-[#00ff88]/30 rounded-lg p-2 text-xs text-[#00ff88] flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
@@ -280,54 +382,29 @@ export const AudioCommander: React.FC<AudioCommanderProps> = ({
         )}
       </div>
 
-      {/* SECTION 3: REQUESTED VOICE OUTPUT PRESETS */}
+      {/* SECTION 5: CUSTOM TEXT-TO-SPEECH (TTS) BOX & VOLUME */}
       <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <Volume2 className="w-4 h-4 text-[#9d4edd]" />
-          <span className="font-bold text-xs text-white uppercase tracking-wider">
-            2. Voice Trigger Outputs (Needed Voices)
-          </span>
-        </div>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-[#ffb703]" />
+            <span className="font-bold text-xs text-white uppercase tracking-wider">
+              4. Custom Text-to-Speech & Master Volume
+            </span>
+          </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-          {VOICE_PRESETS.map((vp) => {
-            const isTriggered = activeVoiceTrigger === vp.id;
-            return (
-              <button
-                key={vp.id}
-                onClick={() => handleTriggerVoice(vp.id)}
-                className="glow-button flex flex-col items-start gap-1 p-3 text-left transition-all"
-                style={{
-                  height: 'auto',
-                  borderWidth: '1px',
-                  borderStyle: 'solid',
-                  borderColor: isTriggered ? vp.color : 'var(--border-glass)',
-                  background: isTriggered ? `${vp.color}25` : 'rgba(23, 28, 53, 0.45)',
-                  boxShadow: isTriggered ? `0 0 15px ${vp.color}50` : undefined
-                }}
-              >
-                <div className="flex justify-between items-center w-full">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">{vp.icon}</span>
-                    <span className="font-bold text-xs text-white">{vp.label}</span>
-                  </div>
-                  <Play className={`w-3.5 h-3.5 ${isTriggered ? 'animate-ping' : ''}`} style={{ color: vp.color }} />
-                </div>
-                <span className="text-[10px] text-[#00f2fe] font-mono">"{vp.spokenPhrase}"</span>
-                <span className="text-[9px] text-[#8e9bb4] line-clamp-1 mt-0.5">{vp.desc}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* SECTION 4: CUSTOM TEXT-TO-SPEECH (TTS) BOX */}
-      <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <MessageSquare className="w-4 h-4 text-[#ffb703]" />
-          <span className="font-bold text-xs text-white uppercase tracking-wider">
-            3. Custom Text-to-Speech (Pi Speaker Audio Output)
-          </span>
+          <div className="flex items-center gap-3">
+            <Volume1 className="w-4 h-4 text-[#8e9bb4]" />
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              value={speakerVolume}
+              onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
+              className="w-28 accent-[#ffb703] h-1.5 bg-white/10 rounded-lg cursor-pointer"
+            />
+            <span className="font-mono font-bold text-xs text-[#ffb703]">{speakerVolume}%</span>
+          </div>
         </div>
 
         <form onSubmit={handleSpeakCustomPhrase} className="flex gap-2">

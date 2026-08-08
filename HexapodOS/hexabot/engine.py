@@ -32,6 +32,22 @@ def set_system_volume(percent: int = 100):
     log_event(f"🔊 Speaker volume maximized to: {pct}%")
     return pct
 
+def set_voice_action_mode(mode: str):
+    """Sets voice action mode: 'SPEAK_AND_ACT' or 'SPEAK_ONLY'."""
+    val = "SPEAK_AND_ACT" if "ACT" in mode.upper() else "SPEAK_ONLY"
+    with state.lock:
+        state.voice_action_mode = val
+    log_event(f"🎙️ Voice Execution Mode set to: {val}")
+    return val
+
+def get_last_voice_command() -> dict:
+    """Returns the last recognized voice command and execution record."""
+    with state.lock:
+        return {
+            "mode": getattr(state, "voice_action_mode", "SPEAK_AND_ACT"),
+            "last_command": getattr(state, "last_voice_command", {}),
+        }
+
 def start_hexabot_os():
     """
     Initializes the Hexabot OS logic by connecting to the ESP32 and starting
@@ -157,5 +173,7 @@ def get_mic_snapshot() -> dict:
             "rhythm_speed": getattr(state, "rhythm_speed", "SLOW"),
             "audio_context": getattr(state, "audio_context", "UNKNOWN"),
             "audio_source": getattr(state, "audio_source", "MIC"),
+            "voice_action_mode": getattr(state, "voice_action_mode", "SPEAK_AND_ACT"),
+            "last_voice_command": getattr(state, "last_voice_command", {}),
             "healthy": bool(getattr(state, "rms_db", -60.0) > -65.0 or getattr(state, "bpm", 0) > 0),
         }
