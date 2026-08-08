@@ -9,6 +9,13 @@ class RobotState:
         self.audio_source = "MIC"     # "MIC" or "BT"
         self.show_audio_logs = False
 
+        # Ultrasonic Ranging & Safety Zones (0-30 DANGER, 30-80 WARNING, >80 CLEAR)
+        self.ultrasonic_front = 100.0
+        self.ultrasonic_back = 100.0
+        self.obstacle_zone = "CLEAR"  # "CLEAR", "WARNING", "DANGER"
+        self.last_obstacle_voice_time = 0.0
+        self.voice_obstacle_alert_enabled = True
+
         # Voice Recognition & Action Config
         self.voice_action_mode = "SPEAK_AND_ACT"  # "SPEAK_AND_ACT" or "SPEAK_ONLY"
         self.last_voice_command = {

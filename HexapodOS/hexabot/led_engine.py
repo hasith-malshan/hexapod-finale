@@ -147,10 +147,28 @@ def led_thread():
                 manual = state.manual_led_pattern
                 bpm = state.bpm
                 beat_active = time.monotonic() - state.last_beat_time < 0.15
+                obstacle_zone = getattr(state, "obstacle_zone", "CLEAR")
+
             elapsed = time.time() - command_time
             frame += 1
 
-            if elapsed < 0.25:
+            # TOP PRIORITY 1: ULTRASONIC OBSTACLE DETECTION ZONES
+            # Zone 1: Critical Proximity Hazard (< 30cm) -> ALL LEDs flash fast bright RED
+            if obstacle_zone == "DANGER":
+                strobe_on = (frame // 3) % 2 == 0
+                red_color = Color(255, 0, 0) if strobe_on else Color(40, 0, 0)
+                for i in range(NUM_LEDS):
+                    strip.setPixelColor(i, red_color)
+            
+            # Zone 2: Obstacle Warning (30cm to 80cm) -> ALL LEDs pulse solid AMBER / ORANGE
+            elif obstacle_zone == "WARNING":
+                amber_val = int(140 + ((math.sin(frame * 0.15) + 1) / 2) * 115)
+                amber_color = Color(amber_val, int(amber_val * 0.45), 0)
+                for i in range(NUM_LEDS):
+                    strip.setPixelColor(i, amber_color)
+
+            # TOP PRIORITY 2: Command & Voice overrides
+            elif elapsed < 0.25:
                 for i in range(NUM_LEDS):
                     strip.setPixelColor(i, Color(255, 255, 255))
             elif elapsed < 1.0:
@@ -161,6 +179,8 @@ def led_thread():
                 fade_to_black_by(60)
                 pos = frame % (NUM_LEDS * 2 - 2)
                 strip.setPixelColor(NUM_LEDS * 2 - 2 - pos if pos >= NUM_LEDS else pos, Color(0, 255, 50))
+            
+            # STANDARD RUNTIME: Manual Patterns or Music Mood Sync
             elif manual:
                 render_manual_led(manual, frame, heat)
             elif mood == "AGGRESSIVE":
@@ -180,7 +200,7 @@ def led_thread():
             else:
                 for i in range(NUM_LEDS):
                     strip.setPixelColor(i, Color(0, int(10 + (
-                                (math.sin(frame * 0.05) + 1) / 2) * 80), int(10 + ((math.sin(frame * 0.05) + 1) / 2) * 80)))
+                                ((math.sin(frame * 0.05) + 1) / 2) * 80)), int(10 + ((math.sin(frame * 0.05) + 1) / 2) * 80)))
             strip.show()
             time.sleep(0.02)
         except Exception:

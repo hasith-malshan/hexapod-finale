@@ -105,19 +105,24 @@ class TempService {
       gz: parseFloat((isWalking ? 5.0 : Math.random() * 0.2).toFixed(2))
     };
 
-    // Simulate Ultrasonic distance sensors
+    // Simulate Ultrasonic distance sensors (0-30cm Danger, 30-80cm Warning, >80cm Clear)
     let dF = 120;
     let dB = 150;
     let dL = 80;
     let dR = 90;
 
     if (this.activeGait === 'WALK_FORWARD') {
-      dF = Math.max(15, 120 - ((this.frameCount % 60) * 1.5));
-      if (dF < 35 && this.frameCount % 20 === 0) {
-        this.addLog('error', `Emergency Stop: Obstacle detected Front at ${dF.toFixed(0)}cm!`, 'ESP32');
+      dF = Math.max(18, 120 - ((this.frameCount % 80) * 1.5));
+      if (dF < 30 && this.frameCount % 25 === 0) {
+        this.addLog('error', `🛑 [CRITICAL HAZARD <30cm]: Distance ${dF.toFixed(0)}cm! ALL LEDs Red Flash. Spoke: 'Critical obstacle ahead! Stopping!'`, 'ESP32');
+      } else if (dF <= 80 && this.frameCount % 40 === 0) {
+        this.addLog('warn', `🟠 [OBSTACLE 30-80cm]: Distance ${dF.toFixed(0)}cm! ALL LEDs Amber. Spoke: 'Obstacle detected ahead.'`, 'ESP32');
       }
     } else if (this.activeGait === 'WALK_BACKWARD') {
-      dB = Math.max(15, 150 - ((this.frameCount % 60) * 2.0));
+      dB = Math.max(18, 150 - ((this.frameCount % 80) * 2.0));
+      if (dB < 30 && this.frameCount % 25 === 0) {
+        this.addLog('error', `🛑 [CRITICAL HAZARD <30cm]: Rear Distance ${dB.toFixed(0)}cm! ALL LEDs Red Flash. Spoke: 'Warning! Obstacle behind!'`, 'ESP32');
+      }
     }
 
     const ultrasonic = {

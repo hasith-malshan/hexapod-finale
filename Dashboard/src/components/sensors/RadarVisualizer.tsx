@@ -1,6 +1,6 @@
 import React from 'react';
 import type { UltrasonicData } from '../../types';
-import { ShieldAlert, Compass, Cpu } from 'lucide-react';
+import { ShieldAlert, Compass, Cpu, Volume2, Sparkles, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 interface RadarVisualizerProps {
   data: UltrasonicData;
@@ -9,17 +9,26 @@ interface RadarVisualizerProps {
 
 export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
   data,
-  isObstacleAlert,
 }) => {
   const { front, back } = data;
-  const SAFE_DISTANCE = 40.0; // cm
 
-  const isDanger = (val: number) => val < SAFE_DISTANCE;
+  // Custom zones requested:
+  // 0 - 30cm: Hazard / Danger zone (ALL LEDs Red, voice alert, stop)
+  // 30 - 80cm: Obstacle zone (ALL LEDs Amber, voice alert)
+  // > 80cm: Safe / Clear (ALL LEDs normal music sync)
+  const isDanger = front < 30.0 || back < 30.0;
+  const isWarning = !isDanger && (front <= 80.0 || back <= 80.0);
 
   const getDistanceColor = (val: number) => {
-    if (val < SAFE_DISTANCE) return '#ff3366';
-    if (val < 70) return '#ffb703';
-    return '#00ff88';
+    if (val < 30.0) return '#ff3366'; // Danger Red
+    if (val <= 80.0) return '#ffb703'; // Warning Amber
+    return '#00ff88'; // Clear Green
+  };
+
+  const getZoneLabel = (val: number) => {
+    if (val < 30.0) return 'DANGER (<30cm)';
+    if (val <= 80.0) return 'OBSTACLE (30-80cm)';
+    return 'CLEAR (>80cm)';
   };
 
   return (
@@ -28,10 +37,10 @@ export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
       <div className="flex justify-between items-start flex-wrap gap-2">
         <div>
           <h3 className="title-glow flex items-center gap-2" style={{ margin: 0 }}>
-            <Compass className="w-4 h-4 text-[#00f2fe]" /> Dual HC-SR04 Radar Array
+            <Compass className="w-4 h-4 text-[#00f2fe]" /> Dual Ultrasonic Collision Radar
           </h3>
           <p className="subtitle" style={{ fontSize: '11px', margin: 0 }}>
-            Front & Rear longitudinal collision detection
+            Front & Rear distance sensors with Voice Alerts & LED strip color sync
           </p>
         </div>
 
@@ -41,35 +50,84 @@ export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
         </div>
       </div>
 
+      {/* ACTIVE LED PATTERN & VOICE STATUS BANNER */}
+      <div 
+        className="rounded-xl p-3 flex items-center justify-between flex-wrap gap-2 transition-all"
+        style={{
+          border: '1px solid',
+          borderColor: isDanger ? '#ff3366' : isWarning ? '#ffb703' : 'rgba(0, 255, 136, 0.25)',
+          background: isDanger ? 'rgba(255, 51, 102, 0.15)' : isWarning ? 'rgba(255, 183, 3, 0.15)' : 'rgba(0, 255, 136, 0.08)'
+        }}
+      >
+        <div className="flex items-center gap-2.5">
+          <Sparkles 
+            className={`w-4 h-4 ${isDanger ? 'text-[#ff3366] animate-spin' : isWarning ? 'text-[#ffb703]' : 'text-[#00ff88]'}`} 
+          />
+          <div>
+            <div className="text-[11px] font-bold text-white uppercase flex items-center gap-1.5">
+              <span>ALL LED Strip Status:</span>
+              <strong style={{ color: isDanger ? '#ff3366' : isWarning ? '#ffb703' : '#00ff88' }}>
+                {isDanger ? '🔴 FLASHING INTENSE RED' : isWarning ? '🟠 SOLID AMBER / ORANGE CAUTION' : '🟢 DYNAMIC MUSIC MOOD SYNC'}
+              </strong>
+            </div>
+            <div className="text-[10px] text-[#8e9bb4]">
+              {isDanger 
+                ? 'Proximity < 30cm: Emergency Red strobe & voice alert active' 
+                : isWarning 
+                ? 'Obstacle 30-80cm: Amber warning LEDs & proximity caution voice' 
+                : 'Distance > 80cm: Path clear, LEDs syncing with music beats'}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-black/40 text-white">
+          <Volume2 className="w-3 h-3 text-[#00f2fe]" />
+          <span>Voice Alerts: ON</span>
+        </div>
+      </div>
+
       {/* Radar & Pinout Overview */}
       <div className="flex flex-col items-center justify-center gap-4 my-auto">
-        <div className="radar-container" style={{ width: '170px', height: '170px' }}>
+        <div className="radar-container" style={{ width: '175px', height: '175px' }}>
           <div className="radar-sweep"></div>
           <div className="radar-center"></div>
 
           {/* Front Value Overlay */}
           <div 
-            className={`radar-value radar-north ${isDanger(front) ? 'danger' : ''}`}
-            style={{ color: getDistanceColor(front) }}
+            className={`radar-value radar-north ${isDanger ? 'danger' : ''}`}
+            style={{ color: getDistanceColor(front), fontWeight: 'bold' }}
           >
-            ▲ FRONT: {front.toFixed(0)}cm
+            ▲ FWD: {front.toFixed(0)}cm
           </div>
 
           {/* Back Value Overlay */}
           <div 
-            className={`radar-value radar-south ${isDanger(back) ? 'danger' : ''}`}
-            style={{ color: getDistanceColor(back) }}
+            className={`radar-value radar-south ${isDanger ? 'danger' : ''}`}
+            style={{ color: getDistanceColor(back), fontWeight: 'bold' }}
           >
             ▼ REAR: {back.toFixed(0)}cm
           </div>
 
-          {/* Safety Critical Radius Ring (40cm) */}
+          {/* Zone 1: Critical Danger Ring (0-30cm) */}
           <div 
             style={{ 
               position: 'absolute',
-              width: '85px',
-              height: '85px',
-              border: '1px dashed rgba(255, 51, 102, 0.4)',
+              width: '65px',
+              height: '65px',
+              border: '1.5px dashed #ff3366',
+              borderRadius: '50%',
+              pointerEvents: 'none',
+              backgroundColor: 'rgba(255, 51, 102, 0.05)'
+            }}
+          />
+
+          {/* Zone 2: Warning Obstacle Ring (30-80cm) */}
+          <div 
+            style={{ 
+              position: 'absolute',
+              width: '130px',
+              height: '130px',
+              border: '1px dashed #ffb703',
               borderRadius: '50%',
               pointerEvents: 'none'
             }}
@@ -80,8 +138,8 @@ export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
         <div className="grid grid-cols-2 gap-2.5 w-full">
           {/* Front Sensor Card */}
           <div 
-            className="bg-black/40 border border-white/5 rounded-xl p-2.5 flex flex-col gap-1 transition-all"
-            style={{ borderColor: isDanger(front) ? '#ff3366' : undefined }}
+            className="bg-black/40 border rounded-xl p-2.5 flex flex-col gap-1 transition-all"
+            style={{ borderColor: getDistanceColor(front) }}
           >
             <div className="flex justify-between items-center text-[10px]">
               <span className="font-bold text-white uppercase">Front Sensor</span>
@@ -95,12 +153,15 @@ export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
             <div className="text-[9px] text-[#8e9bb4] font-mono">
               Trig: <span className="text-[#00f2fe]">GPIO 18</span> | Echo: <span className="text-[#00f2fe]">GPIO 19</span>
             </div>
+            <div className="text-[9px] font-bold" style={{ color: getDistanceColor(front) }}>
+              {getZoneLabel(front)}
+            </div>
           </div>
 
           {/* Back Sensor Card */}
           <div 
-            className="bg-black/40 border border-white/5 rounded-xl p-2.5 flex flex-col gap-1 transition-all"
-            style={{ borderColor: isDanger(back) ? '#ff3366' : undefined }}
+            className="bg-black/40 border rounded-xl p-2.5 flex flex-col gap-1 transition-all"
+            style={{ borderColor: getDistanceColor(back) }}
           >
             <div className="flex justify-between items-center text-[10px]">
               <span className="font-bold text-white uppercase">Rear Sensor</span>
@@ -114,27 +175,40 @@ export const RadarVisualizer: React.FC<RadarVisualizerProps> = ({
             <div className="text-[9px] text-[#8e9bb4] font-mono">
               Trig: <span className="text-[#ffb703]">GPIO 27</span> | Echo: <span className="text-[#ffb703]">GPIO 14</span>
             </div>
+            <div className="text-[9px] font-bold" style={{ color: getDistanceColor(back) }}>
+              {getZoneLabel(back)}
+            </div>
           </div>
         </div>
 
-        {/* Hazard Alert Banner */}
-        {isObstacleAlert || isDanger(front) || isDanger(back) ? (
-          <div className="w-full bg-[#ff3366]/10 border border-[#ff3366]/30 rounded-xl p-2.5 flex items-center gap-2.5 text-xs text-[#ff3366] animate-pulse">
+        {/* Dynamic Zone Feedback Banner */}
+        {isDanger ? (
+          <div className="w-full bg-[#ff3366]/15 border border-[#ff3366]/40 rounded-xl p-2.5 flex items-center gap-2.5 text-xs text-[#ff3366] animate-pulse">
             <ShieldAlert className="w-5 h-5 flex-shrink-0" />
             <div>
-              <div className="font-bold uppercase">PROXIMITY WARNING</div>
-              <div className="text-[10px] text-[#ff3366]/90">
-                Obstacle detected inside 40cm safe perimeter!
+              <div className="font-bold uppercase">CRITICAL HAZARD ZONE (&lt; 30cm)</div>
+              <div className="text-[10px] text-white">
+                Obstacle within hexapod leg radius! ALL LEDs Red Strobe | Spoken: <em>"Critical obstacle ahead! Stopping!"</em>
+              </div>
+            </div>
+          </div>
+        ) : isWarning ? (
+          <div className="w-full bg-[#ffb703]/15 border border-[#ffb703]/40 rounded-xl p-2.5 flex items-center gap-2.5 text-xs text-[#ffb703]">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+            <div>
+              <div className="font-bold uppercase">OBSTACLE CAUTION ZONE (30 - 80cm)</div>
+              <div className="text-[10px] text-white">
+                Approaching obstacle! ALL LEDs Solid Amber | Spoken: <em>"Obstacle detected ahead."</em>
               </div>
             </div>
           </div>
         ) : (
           <div className="w-full bg-[#00ff88]/10 border border-[#00ff88]/20 rounded-xl p-2.5 flex items-center gap-2.5 text-xs text-[#00ff88]">
-            <ShieldAlert className="w-5 h-5 flex-shrink-0 text-[#00ff88]" />
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-[#00ff88]" />
             <div>
-              <div className="font-bold uppercase">CLEAR TRAJECTORY</div>
+              <div className="font-bold uppercase">SAFE TRAJECTORY (&gt; 80cm)</div>
               <div className="text-[10px] text-[#00ff88]/90">
-                Front & Rear channels clear. Ranging nominal.
+                Front & Rear clear. ALL LEDs in dynamic music beat sync.
               </div>
             </div>
           </div>
