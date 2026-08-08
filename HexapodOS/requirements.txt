@@ -7,9 +7,7 @@ websockets
 pyserial
 rpi_ws281x
 adafruit-circuitpython-rgb-display
-board
-busio
-digitalio
+Adafruit-Blinka
 Pillow
 
 # Audio DSP & Machine Learning
