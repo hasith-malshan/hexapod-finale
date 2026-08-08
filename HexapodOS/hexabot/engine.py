@@ -27,11 +27,17 @@ def start_hexabot_os():
     # Define all daemon threads
     threads = [
         threading.Thread(target=esp32_reader_thread, daemon=True, name="esp32_reader_thread"),
-        threading.Thread(target=yamnet_context_thread, daemon=True, name="yamnet_context_thread"),
-        threading.Thread(target=audio_listener, daemon=True, name="audio_listener"),
         threading.Thread(target=led_thread, daemon=True, name="led_thread"),
         threading.Thread(target=display_loop, daemon=True, name="display_loop"),
     ]
+
+    if state.operating_mode == "AUTO":
+        threads.extend([
+            threading.Thread(target=yamnet_context_thread, daemon=True, name="yamnet_context_thread"),
+            threading.Thread(target=audio_listener, daemon=True, name="audio_listener"),
+        ])
+    else:
+        log_event("⚠️ MANUAL mode selected. AI and Audio threads will not be started.")
 
     log_event("🚀 Starting OS daemon threads...")
     for t in threads:
