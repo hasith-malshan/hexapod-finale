@@ -1,0 +1,23 @@
+# Web Server
+fastapi
+uvicorn
+websockets
+
+# Hexabot Hardware & Control
+pyserial
+rpi_ws281x
+adafruit-circuitpython-rgb-display
+board
+busio
+digitalio
+Pillow
+
+# Audio DSP & Machine Learning
+numpy
+scipy
+soundcard
+aubio
+# tensorflow  # Optional YAMNet
+# tensorflow-hub  # Optional YAMNet
+# SpeechRecognition  # Optional
+# pyttsx3  # Optional
