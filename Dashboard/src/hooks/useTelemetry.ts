@@ -148,7 +148,7 @@ export const useTelemetry = (mode: ConnectionMode, wsIp: string) => {
       tempService.sendCommand(cmd);
     } else {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: 'command', payload: cmd }));
+        wsRef.current.send(JSON.stringify({ type: 'command', action: cmd }));
         addLocalLog('info', `Sent command: "${cmd}"`);
       } else {
         addLocalLog('error', `Cannot send command "${cmd}": Socket disconnected.`);

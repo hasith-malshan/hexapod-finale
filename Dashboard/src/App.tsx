@@ -9,6 +9,7 @@ import { RadarVisualizer } from './components/sensors/RadarVisualizer';
 import { IMUVisualizer } from './components/sensors/IMUVisualizer';
 import { AudioVisualizer } from './components/sensors/AudioVisualizer';
 import { LogFeed } from './components/common/LogFeed';
+import { GodModeCli } from './components/controls/GodModeCli';
 
 export const App: React.FC = () => {
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>('SIMULATOR');
@@ -77,6 +78,11 @@ export const App: React.FC = () => {
         <LogFeed 
           logs={logs}
         />
+      </div>
+
+      {/* Grid Row 5: God Mode CLI Terminal */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px', marginTop: '10px' }}>
+        <GodModeCli sendCommand={sendCommand} />
       </div>
     </div>
   );
