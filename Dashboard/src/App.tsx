@@ -19,8 +19,15 @@ import { Zap, Music, Sun, Cpu, Terminal } from 'lucide-react';
 type TabSection = 'dashboard' | 'choreo' | 'lighting' | 'diagnostics' | 'terminal';
 
 export const App: React.FC = () => {
-  const [connectionMode, setConnectionMode] = useState<ConnectionMode>('SIMULATOR');
-  const [wsIp, setWsIp] = useState<string>('10.42.0.1:8000');
+  // Automatically detect host/port if accessed via browser on Pi
+  const defaultHost = typeof window !== 'undefined' && window.location.host && !window.location.host.includes(':5173')
+    ? window.location.host 
+    : '10.42.0.1:8080';
+
+  const [connectionMode, setConnectionMode] = useState<ConnectionMode>(
+    typeof window !== 'undefined' && window.location.port !== '5173' ? 'LIVE' : 'SIMULATOR'
+  );
+  const [wsIp, setWsIp] = useState<string>(defaultHost);
   const [activeTab, setActiveTab] = useState<TabSection>('dashboard');
   
   const { telemetry, logs, connectionStatus, sendCommand } = useTelemetry(connectionMode, wsIp);

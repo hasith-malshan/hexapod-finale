@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 import threading
+import socket
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -63,6 +64,17 @@ DASHBOARD_DIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "d
 os.makedirs(DASHBOARD_DIST_DIR, exist_ok=True)
 app.mount("/", StaticFiles(directory=DASHBOARD_DIST_DIR, html=True), name="static")
 
+def is_port_in_use(port: int, host: str = "0.0.0.0") -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+def find_available_port(start_port: int = 8080) -> int:
+    port = start_port
+    while is_port_in_use(port) and port < start_port + 20:
+        port += 1
+    return port
+
 if __name__ == "__main__":
     print("\n" + "=" * 50 + "\n      HEXAPOD STARTUP MENU\n" + "=" * 50)
     print(" [1] Autonomous AI / Voice Dancer Mode")
@@ -89,15 +101,19 @@ if __name__ == "__main__":
             cli_thread = threading.Thread(target=manual_testing_loop, daemon=True, name="manual_cli_thread")
             cli_thread.start()
 
-    port = int(os.environ.get("PORT", 8000))
+    # Determine port (Default: 8080 with auto-fallback)
+    env_port = os.environ.get("PORT")
+    if env_port:
+        port = int(env_port)
+    else:
+        port = find_available_port(start_port=8080)
+
     host = os.environ.get("HOST", "0.0.0.0")
 
+    print("\n" + "=" * 50)
+    print(f"🚀 Hexapod Dashboard live at: http://10.42.0.1:{port}")
+    print(f"📡 WebSocket endpoint at:     ws://10.42.0.1:{port}/api/ws")
+    print("=" * 50 + "\n")
+
     import uvicorn
-    try:
-        uvicorn.run("main:app", host=host, port=port, reload=False)
-    except OSError as e:
-        if getattr(e, 'errno', None) == 98 or "address already in use" in str(e).lower():
-            print(f"\n❌ Port {port} is already in use by another service or background server!")
-            print(f"👉 Fix on Pi: run 'sudo fuser -k {port}/tcp' or 'sudo systemctl stop hexapod'")
-            print(f"👉 Or start on a different port: PORT=8080 sudo python3 main.py\n")
-        raise
+    uvicorn.run("main:app", host=host, port=port, reload=False)
