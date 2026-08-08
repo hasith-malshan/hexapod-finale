@@ -1,5 +1,6 @@
 import collections
 import threading
+import time
 from typing import Deque
 
 class RobotState:
@@ -8,6 +9,10 @@ class RobotState:
         self.operating_mode = "AUTO"  # "AUTO" or "MANUAL"
         self.audio_source = "MIC"     # "MIC" or "BT"
         self.show_audio_logs = False
+
+        # Central Log History Buffer (Thread-Safe Ring Buffer)
+        self.log_history: Deque[dict] = collections.deque(maxlen=150)
+        self._init_boot_logs()
 
         # Ultrasonic Ranging & Safety Zones (0-30 DANGER, 30-80 WARNING, >80 CLEAR)
         self.ultrasonic_front = 100.0
@@ -66,6 +71,30 @@ class RobotState:
 
         self.bpm_history: Deque[float] = collections.deque(maxlen=32)
         self.lock = threading.RLock()
+
+    def _init_boot_logs(self):
+        t = time.strftime("%H:%M:%S")
+        self.log_history.append({
+            "id": "boot_1",
+            "timestamp": t,
+            "level": "info",
+            "message": "HexapodOS Core Architecture Initialized",
+            "source": "PI"
+        })
+        self.log_history.append({
+            "id": "boot_2",
+            "timestamp": t,
+            "level": "success",
+            "message": "FastAPI & WebSocket Server Live on port 8080",
+            "source": "PI"
+        })
+        self.log_history.append({
+            "id": "boot_3",
+            "timestamp": t,
+            "level": "info",
+            "message": "Searching for ESP32 on /dev/serial0, /dev/ttyUSB0 (115200 baud)...",
+            "source": "ESP32"
+        })
 
 
 # Global Singleton Instance

@@ -65,13 +65,31 @@ export const useTelemetry = (mode: ConnectionMode, wsIp: string) => {
     if (mode === 'SIMULATOR') {
       setLogs(tempService.getHistoryLogs());
     } else {
-      setLogs([{
-        id: 'init',
-        timestamp: new Date().toLocaleTimeString(),
-        level: 'info',
-        message: `Connecting to ${wsIp}...`,
-        source: 'DASHBOARD'
-      }]);
+      const cleanIp = wsIp.replace('http://', '').replace('https://', '').replace('ws://', '').replace('wss://', '');
+      fetch(`http://${cleanIp}/api/logs`)
+        .then(res => res.json())
+        .then((fetchedLogs: LogEntry[]) => {
+          if (Array.isArray(fetchedLogs) && fetchedLogs.length > 0) {
+            setLogs(fetchedLogs.reverse());
+          } else {
+            setLogs([{
+              id: 'init',
+              timestamp: new Date().toLocaleTimeString(),
+              level: 'info',
+              message: `Connected to ${wsIp}`,
+              source: 'DASHBOARD'
+            }]);
+          }
+        })
+        .catch(() => {
+          setLogs([{
+            id: 'init',
+            timestamp: new Date().toLocaleTimeString(),
+            level: 'info',
+            message: `Connecting to ${wsIp}...`,
+            source: 'DASHBOARD'
+          }]);
+        });
     }
   }, [mode, wsIp]);
 

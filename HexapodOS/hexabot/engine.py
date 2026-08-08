@@ -1,6 +1,7 @@
 import os
 import threading
 import logging
+import time
 
 from .serial_link import esp32_reader_thread, connect_to_esp32
 from .audio_dsp import audio_listener
@@ -9,9 +10,34 @@ from .led_engine import led_thread
 from .lcd_engine import display_loop
 from .state import state
 
-def log_event(message: str):
+def log_event(message: str, level: str = "info", source: str = "PI"):
     logging.info(message)
     print(message)
+    
+    # Infer level and source if not explicitly provided
+    lvl = level
+    src = source
+    if "error" in message.lower() or "fault" in message.lower() or "❌" in message or "danger" in message.lower():
+        lvl = "error"
+    elif "warning" in message.lower() or "⚠️" in message or "obstacle" in message.lower() or "caution" in message.lower():
+        lvl = "warn"
+    elif "success" in message.lower() or "✅" in message or "live" in message.lower() or "connected" in message.lower() or "executed" in message.lower():
+        lvl = "success"
+
+    if "esp32" in message.lower() or "serial" in message.lower() or "tilt" in message.lower():
+        src = "ESP32"
+    elif "dashboard" in message.lower() or "ws" in message.lower():
+        src = "DASHBOARD"
+
+    entry = {
+        "id": f"log_{int(time.time() * 1000)}_{len(state.log_history)}",
+        "timestamp": time.strftime("%H:%M:%S"),
+        "level": lvl,
+        "message": message,
+        "source": src
+    }
+    with state.lock:
+        state.log_history.append(entry)
 
 def set_system_volume(percent: int = 100):
     """Sets system ALSA and PulseAudio speaker volume to maximum level (or specified %)."""
@@ -29,7 +55,7 @@ def set_system_volume(percent: int = 100):
             os.system(cmd)
         except Exception:
             pass
-    log_event(f"🔊 Speaker volume maximized to: {pct}%")
+    log_event(f"🔊 Speaker volume maximized to: {pct}%", level="success")
     return pct
 
 def set_voice_action_mode(mode: str):
@@ -37,7 +63,7 @@ def set_voice_action_mode(mode: str):
     val = "SPEAK_AND_ACT" if "ACT" in mode.upper() else "SPEAK_ONLY"
     with state.lock:
         state.voice_action_mode = val
-    log_event(f"🎙️ Voice Execution Mode set to: {val}")
+    log_event(f"🎙️ Voice Execution Mode set to: {val}", level="info")
     return val
 
 def get_last_voice_command() -> dict:
@@ -53,9 +79,7 @@ def start_hexabot_os():
     Initializes the Hexabot OS logic by connecting to the ESP32 and starting
     all background threads (audio DSP, AI, serial, LEDs, LCD).
     """
-    log_event("\n" + "=" * 54)
-    log_event("       🤖 CODEGENIX HEXABOT OS - UNIFIED 🤖")
-    log_event("=" * 54)
+    log_event("       🤖 CODEGENIX HEXABOT OS - UNIFIED 🤖", level="success")
     
     # Maximize speaker volume to 100% on startup
     set_system_volume(100)
@@ -76,14 +100,14 @@ def start_hexabot_os():
             threading.Thread(target=audio_listener, daemon=True, name="audio_listener"),
         ])
     else:
-        log_event("⚠️ MANUAL mode selected. Audio DSP & listener active for telemetry.")
+        log_event("⚠️ MANUAL mode selected. Audio DSP & listener active for telemetry.", level="warn")
         threads.append(threading.Thread(target=audio_listener, daemon=True, name="audio_listener"))
 
-    log_event("🚀 Starting OS daemon threads...")
+    log_event("🚀 Starting OS daemon threads...", level="info")
     for t in threads:
         t.start()
         
-    log_event("✅ Hexabot OS is running in background.")
+    log_event("✅ Hexabot OS is running in background.", level="success")
     
 def set_mode(new_mode: str):
     """Sets the operating mode of the robot (AUTO or MANUAL)."""
@@ -93,13 +117,13 @@ def set_mode(new_mode: str):
             # If switching to manual, ensure we stop any active dance
             state.planned_move = None
             state.current_move = "STAND"
-        log_event(f"⚙️ Operating Mode set to: {state.operating_mode}")
+        log_event(f"⚙️ Operating Mode set to: {state.operating_mode}", level="info")
 
 def trigger_manual_command(command: str):
     """Triggers a specific action. Requires MANUAL mode."""
     with state.lock:
         if state.operating_mode != "MANUAL":
-            log_event(f"⚠️ Ignored command {command} because not in MANUAL mode.")
+            log_event(f"⚠️ Ignored command {command} because not in MANUAL mode.", level="warn")
             return False
             
     from .serial_link import send_to_esp32
@@ -110,25 +134,25 @@ def set_led_pattern(pattern: str):
     """Override LED pattern manually."""
     with state.lock:
         state.manual_led_pattern = pattern
-    log_event(f"✨ LED Pattern set to: {pattern}")
+    log_event(f"✨ LED Pattern set to: {pattern}", level="success")
 
 def reset_led_auto():
     """Return LEDs to auto mood sync."""
     with state.lock:
         state.manual_led_pattern = None
-    log_event("🎵 LEDs returned to AUTO MOOD SYNC")
+    log_event("🎵 LEDs returned to AUTO MOOD SYNC", level="info")
 
 def set_emotion(mood: str):
     """Override LCD eye emotion."""
     with state.lock:
         state.manual_mood = mood
-    log_event(f"📺 Emotion set to: {mood}")
+    log_event(f"📺 Emotion set to: {mood}", level="info")
 
 def reset_emotion_auto():
     """Return LCD to auto mood sync."""
     with state.lock:
         state.manual_mood = None
-    log_event("📺 LCD returned to AUTO MOOD SYNC")
+    log_event("📺 LCD returned to AUTO MOOD SYNC", level="info")
 
 def run_emotion_test():
     """Run automated emotion test cycle in background thread."""
@@ -138,25 +162,25 @@ def run_emotion_test():
         for mood in EMOTIONS:
             with state.lock:
                 state.manual_mood = mood
-            log_event(f"📺 Testing: {mood}")
+            log_event(f"📺 Testing: {mood}", level="info")
             _time.sleep(2.5)
         with state.lock:
             state.manual_mood = None
-        log_event("📺 Emotion test complete")
+        log_event("📺 Emotion test complete", level="success")
     threading.Thread(target=_cycle, daemon=True).start()
 
 def set_audio_source(source: str):
     """Set audio source: MIC or BT."""
     with state.lock:
         state.audio_source = source.upper()
-    log_event(f"🎧 Audio source set to: {source.upper()}")
+    log_event(f"🎧 Audio source set to: {source.upper()}", level="info")
 
 def toggle_logging():
     """Toggle background telemetry logging."""
     with state.lock:
         state.show_audio_logs = not state.show_audio_logs
         enabled = state.show_audio_logs
-    log_event(f"📁 Telemetry Logging: {'ON' if enabled else 'OFF'}")
+    log_event(f"📁 Telemetry Logging: {'ON' if enabled else 'OFF'}", level="info")
     return enabled
 
 def get_mic_snapshot() -> dict:

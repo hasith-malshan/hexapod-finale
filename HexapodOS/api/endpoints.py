@@ -54,6 +54,19 @@ def get_status():
             "robot_ready": getattr(state, "robot_ready", False),
         }
 
+@router.get("/logs")
+def get_system_logs():
+    """Returns the central history buffer of all system and telemetry logs."""
+    with state.lock:
+        return list(state.log_history)
+
+@router.post("/logs/clear")
+def clear_system_logs():
+    """Clears system logs."""
+    with state.lock:
+        state.log_history.clear()
+    return {"status": "success", "message": "Logs cleared"}
+
 @router.post("/mode")
 def change_mode(mode: str):
     mode = mode.upper()
