@@ -1,3 +1,6 @@
+import threading
+import subprocess
+import os
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
@@ -7,7 +10,8 @@ from hexabot import (
     set_emotion, reset_emotion_auto, run_emotion_test,
     set_audio_source, toggle_logging, get_mic_snapshot,
     set_system_volume, set_voice_action_mode, get_last_voice_command,
-    say_phrase_offline, trigger_voice_action, match_and_execute_voice_command
+    say_phrase_offline, trigger_voice_action, match_and_execute_voice_command,
+    hanthane_runner
 )
 
 router = APIRouter()
@@ -210,3 +214,61 @@ def voice_trigger(action: Optional[str] = Query(None), req: Optional[VoiceTrigge
         
     result = trigger_voice_action(action_key)
     return result
+
+# --- HANTHANE CHOREOGRAPHY ENDPOINTS ---
+
+@router.post("/choreo/hanthane/start")
+def start_hanthane(offset: float = Query(0.0, ge=0.0)):
+    """Starts the beat-locked choreography timeline for Hanthanata Payana Sanda."""
+    hanthane_runner.start(start_offset=offset)
+    return {"status": "success", "message": f"Choreography started from offset {offset:.1f}s", "status_data": hanthane_runner.get_status()}
+
+@router.post("/choreo/hanthane/stop")
+def stop_hanthane():
+    """Stops the Hanthane choreography timeline and sets robot to STAND."""
+    hanthane_runner.stop()
+    return {"status": "success", "message": "Choreography stopped", "status_data": hanthane_runner.get_status()}
+
+@router.get("/choreo/hanthane/status")
+def get_hanthane_playback_status():
+    """Gets the current status of Hanthane choreography playback."""
+    return hanthane_runner.get_status()
+
+# --- RASPBERRY PI SYSTEM POWER CONTROLS ---
+
+@router.post("/system/reboot")
+def trigger_pi_reboot():
+    """Safely reboots the Raspberry Pi."""
+    def _do_reboot():
+        time_to_wait = 1.0
+        import time as _t
+        _t.sleep(time_to_wait)
+        try:
+            subprocess.run(["sudo", "reboot"], check=False)
+        except Exception:
+            try:
+                subprocess.run(["shutdown", "-r", "now"], check=False)
+            except Exception:
+                os.system("reboot")
+
+    threading.Thread(target=_do_reboot, daemon=True).start()
+    return {"status": "success", "message": "Reboot initiated. System restarting in 1 second."}
+
+@router.post("/system/shutdown")
+def trigger_pi_shutdown():
+    """Safely shuts down and powers off the Raspberry Pi."""
+    def _do_shutdown():
+        time_to_wait = 1.0
+        import time as _t
+        _t.sleep(time_to_wait)
+        try:
+            subprocess.run(["sudo", "poweroff"], check=False)
+        except Exception:
+            try:
+                subprocess.run(["shutdown", "-h", "now"], check=False)
+            except Exception:
+                os.system("poweroff")
+
+    threading.Thread(target=_do_shutdown, daemon=True).start()
+    return {"status": "success", "message": "Shutdown initiated. System powering off in 1 second."}
+

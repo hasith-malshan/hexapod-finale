@@ -59,6 +59,11 @@ from api.websocket import router as ws_router
 app.include_router(api_router, prefix="/api", tags=["API"])
 app.include_router(ws_router, prefix="/api", tags=["WebSockets"])
 
+# Mount static resources (audio, models, assets)
+RES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "res")
+os.makedirs(RES_DIR, exist_ok=True)
+app.mount("/res", StaticFiles(directory=RES_DIR), name="res")
+
 # Mount static React dashboard build
 DASHBOARD_DIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dist")
 os.makedirs(DASHBOARD_DIST_DIR, exist_ok=True)

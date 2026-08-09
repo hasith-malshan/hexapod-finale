@@ -132,6 +132,11 @@ def esp32_reader_thread():
             if line == "READY":
                 emit_log("🔌 [ESP32 HANDSHAKE]: Robot Ready for next move", level="success", source="ESP32")
                 handle_robot_ready()
+                try:
+                    from .hanthane_player import hanthane_runner
+                    hanthane_runner.handle_ready()
+                except Exception:
+                    pass
 
             # 2. Tilt / IMU readings
             elif line.startswith("TILT:"):

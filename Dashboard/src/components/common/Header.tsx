@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { ConnectionMode } from '../../hooks/useTelemetry';
 import type { TelemetryFrame } from '../../types';
 import { 
@@ -7,7 +7,11 @@ import {
   Thermometer, 
   Wifi, 
   CircleDot,
-  Bot
+  Bot,
+  Power,
+  RotateCcw,
+  AlertTriangle,
+  X
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -17,6 +21,7 @@ interface HeaderProps {
   setMode: (mode: ConnectionMode) => void;
   wsIp: string;
   setWsIp: (ip: string) => void;
+  sendCommand?: (cmd: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -26,8 +31,12 @@ export const Header: React.FC<HeaderProps> = ({
   setMode,
   wsIp,
   setWsIp,
+  sendCommand,
 }) => {
   const { system } = telemetry;
+  const [showPowerModal, setShowPowerModal] = useState<boolean>(false);
+  const [powerAction, setPowerAction] = useState<'NONE' | 'REBOOT_CONFIRM' | 'SHUTDOWN_CONFIRM' | 'EXECUTING'>('NONE');
+  const [statusMessage, setStatusMessage] = useState<string>('');
 
   const getStatusClass = () => {
     if (connectionStatus === 'CONNECTED') return 'status-badge online';
@@ -143,7 +152,159 @@ export const Header: React.FC<HeaderProps> = ({
         <span className={getStatusClass()}>
           {connectionStatus === 'CONNECTED' ? 'ONLINE' : connectionStatus === 'CONNECTING' ? 'CONNECTING' : 'OFFLINE'}
         </span>
+
+        {/* Pi Power Control Trigger */}
+        <button
+          onClick={() => {
+            setShowPowerModal(true);
+            setPowerAction('NONE');
+            setStatusMessage('');
+          }}
+          className="glow-button flex items-center justify-center p-2 rounded-lg text-[#ff3366] hover:bg-[#ff3366]/20 border border-[#ff3366]/40 transition-all"
+          title="Raspberry Pi Power Options (Reboot / Shutdown)"
+        >
+          <Power className="w-4 h-4" />
+        </button>
       </div>
+
+      {/* Pi Power Management Safe Confirmation Modal */}
+      {showPowerModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && powerAction !== 'EXECUTING') {
+              setShowPowerModal(false);
+            }
+          }}
+        >
+          <div 
+            className="glass-card flex flex-col gap-4 p-6 rounded-2xl max-w-md w-full border border-[#ff3366]/40 shadow-2xl relative animate-in fade-in zoom-in duration-200"
+            style={{ background: 'linear-gradient(135deg, rgba(23, 28, 53, 0.98) 0%, rgba(35, 15, 30, 0.98) 100%)' }}
+          >
+            {/* Header */}
+            <div className="flex justify-between items-center pb-2 border-b border-white/10">
+              <div className="flex items-center gap-2 text-[#ff3366]">
+                <Power className="w-5 h-5" />
+                <h3 className="text-base font-bold text-white m-0">Raspberry Pi Power Control</h3>
+              </div>
+              {powerAction !== 'EXECUTING' && (
+                <button 
+                  onClick={() => setShowPowerModal(false)}
+                  className="text-[#8e9bb4] hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+
+            {/* Content Area */}
+            {powerAction === 'NONE' && (
+              <div className="flex flex-col gap-3">
+                <p className="text-xs text-[#8e9bb4] m-0">
+                  Select a system power operation for the onboard Raspberry Pi controller:
+                </p>
+
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  {/* Reboot Option */}
+                  <button
+                    onClick={() => setPowerAction('REBOOT_CONFIRM')}
+                    className="glow-button flex flex-col items-center gap-2 p-4 text-center border border-[#ffb703]/50 hover:bg-[#ffb703]/20 transition-all rounded-xl"
+                  >
+                    <RotateCcw className="w-6 h-6 text-[#ffb703]" />
+                    <div>
+                      <span className="font-bold text-sm text-white block">Reboot Pi</span>
+                      <span className="text-[10px] text-[#8e9bb4]">Restart Hexapod OS</span>
+                    </div>
+                  </button>
+
+                  {/* Shutdown Option */}
+                  <button
+                    onClick={() => setPowerAction('SHUTDOWN_CONFIRM')}
+                    className="glow-button flex flex-col items-center gap-2 p-4 text-center border border-[#ff3366]/50 hover:bg-[#ff3366]/20 transition-all rounded-xl"
+                  >
+                    <Power className="w-6 h-6 text-[#ff3366]" />
+                    <div>
+                      <span className="font-bold text-sm text-white block">Shutdown Pi</span>
+                      <span className="text-[10px] text-[#8e9bb4]">Safe Poweroff</span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Reboot Confirmation */}
+            {powerAction === 'REBOOT_CONFIRM' && (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2 text-[#ffb703] bg-[#ffb703]/10 p-3 rounded-lg border border-[#ffb703]/20">
+                  <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                  <span className="text-xs">
+                    Are you sure you want to <strong>reboot</strong> the Raspberry Pi? Live connections will disconnect temporarily.
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    onClick={() => setPowerAction('NONE')}
+                    className="glow-button px-4 py-2 text-xs text-[#8e9bb4]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPowerAction('EXECUTING');
+                      setStatusMessage('Rebooting Raspberry Pi... Reconnect in ~20 seconds.');
+                      if (sendCommand) sendCommand('SYSTEM_REBOOT');
+                    }}
+                    className="glow-button px-4 py-2 text-xs font-bold text-black bg-[#ffb703] border-none rounded-lg"
+                  >
+                    Confirm Reboot
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Shutdown Confirmation */}
+            {powerAction === 'SHUTDOWN_CONFIRM' && (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2 text-[#ff3366] bg-[#ff3366]/10 p-3 rounded-lg border border-[#ff3366]/20">
+                  <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                  <span className="text-xs">
+                    Are you sure you want to <strong>safely power off</strong> the Raspberry Pi? You will need physical power cycle to restart.
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    onClick={() => setPowerAction('NONE')}
+                    className="glow-button px-4 py-2 text-xs text-[#8e9bb4]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPowerAction('EXECUTING');
+                      setStatusMessage('Shutting down Raspberry Pi safely. You can cut battery power shortly.');
+                      if (sendCommand) sendCommand('SYSTEM_SHUTDOWN');
+                    }}
+                    className="glow-button px-4 py-2 text-xs font-bold text-white bg-[#ff3366] border-none rounded-lg"
+                  >
+                    Confirm Shutdown
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Executing Status */}
+            {powerAction === 'EXECUTING' && (
+              <div className="flex flex-col items-center text-center gap-3 py-4">
+                <div className="w-10 h-10 border-4 border-[#ff3366]/30 border-t-[#ff3366] rounded-full animate-spin" />
+                <span className="text-sm font-semibold text-white">{statusMessage}</span>
+                <span className="text-xs text-[#8e9bb4]">Signal sent to backend.</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   );
 };

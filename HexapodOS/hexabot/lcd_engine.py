@@ -116,16 +116,16 @@ def display_loop():
                 if time.time() - blink_timer > 0.15:
                     is_blinking = False
 
-            roll_offset = int(roll * 1.5)
+            # Render eyes with music-driven beat dilation, mood, and blinking (decoupled from IMU tilt)
             draw_rounded_rect(
                 draw,
-                [lx - ew // 2, cy_r + roll_offset - h_l // 2, lx + ew // 2, cy_r + roll_offset + h_l // 2],
+                [lx - ew // 2, cy_r - h_l // 2, lx + ew // 2, cy_r + h_l // 2],
                 20,
                 col
             )
             draw_rounded_rect(
                 draw,
-                [rx - ew // 2, cy_r - roll_offset - h_r // 2, rx + ew // 2, cy_r - roll_offset + h_r // 2],
+                [rx - ew // 2, cy_r - h_r // 2, rx + ew // 2, cy_r + h_r // 2],
                 20,
                 col
             )

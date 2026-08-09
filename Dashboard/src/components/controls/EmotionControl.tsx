@@ -51,7 +51,7 @@ export const EmotionControl: React.FC<EmotionControlProps> = ({
             <Eye className="w-4 h-4 text-[#00f2fe]" /> ILI9341 LCD Screen Eye Emotions
           </h3>
           <p className="subtitle" style={{ fontSize: '11px', margin: 0 }}>
-            320x240 TFT SPI display expressive face & tilt-reactive eye engine
+            320x240 TFT SPI display expressive face & music/beat-reactive eye engine
           </p>
         </div>
 
@@ -83,7 +83,7 @@ export const EmotionControl: React.FC<EmotionControlProps> = ({
               : `AUTO: ${audio.energyLevel === 'HIGH' ? 'ENERGY/AGGRESSIVE' : 'IDLE/CHILL'}`}
           </strong>
         </div>
-        <span className="text-[10px] text-[#8e9bb4]">Tilt Angle: {(system.bodyRoll || 0).toFixed(1)}° | 33Hz SPI</span>
+        <span className="text-[10px] text-[#00ff88]">Music Beat Sync Active | 33Hz SPI</span>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">

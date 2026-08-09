@@ -306,6 +306,19 @@ export const useTelemetry = (mode: ConnectionMode, wsIp: string) => {
         const phrase = cmd.replace('SPEAK:', '');
         await fetch(`${baseUrl}/audio/speak?phrase=${encodeURIComponent(phrase)}`, { method: 'POST' });
         addLocalLog('info', `Speak on Pi: "${phrase}"`);
+      } else if (cmd.startsWith('HANTHANE_START:')) {
+        const offset = parseFloat(cmd.replace('HANTHANE_START:', '')) || 0;
+        await fetch(`${baseUrl}/choreo/hanthane/start?offset=${offset}`, { method: 'POST' });
+        addLocalLog('success', `Started Hanthane Choreography from ${offset.toFixed(1)}s`);
+      } else if (cmd === 'HANTHANE_STOP') {
+        await fetch(`${baseUrl}/choreo/hanthane/stop`, { method: 'POST' });
+        addLocalLog('warn', 'Stopped Hanthane Choreography -> STAND');
+      } else if (cmd === 'SYSTEM_REBOOT') {
+        await fetch(`${baseUrl}/system/reboot`, { method: 'POST' });
+        addLocalLog('warn', 'Reboot signal dispatched to Raspberry Pi');
+      } else if (cmd === 'SYSTEM_SHUTDOWN') {
+        await fetch(`${baseUrl}/system/shutdown`, { method: 'POST' });
+        addLocalLog('error', 'Shutdown signal dispatched to Raspberry Pi');
       } else if (!sentViaWs) {
         await fetch(`${baseUrl}/command?cmd=${encodeURIComponent(cmd)}`, { method: 'POST' });
         addLocalLog('info', `REST: "${cmd}"`);

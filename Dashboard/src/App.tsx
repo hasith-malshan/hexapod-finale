@@ -4,6 +4,7 @@ import type { ConnectionMode } from './hooks/useTelemetry';
 import { Header } from './components/common/Header';
 import { LocomotionControl } from './components/controls/LocomotionControl';
 import { PresetDances } from './components/controls/PresetDances';
+import { HanthaneShowcase } from './components/controls/HanthaneShowcase';
 import { LedControl } from './components/controls/LedControl';
 import { EmotionControl } from './components/controls/EmotionControl';
 import { LegDiagnostics } from './components/controls/LegDiagnostics';
@@ -50,6 +51,7 @@ export const App: React.FC = () => {
         setMode={setConnectionMode}
         wsIp={wsIp}
         setWsIp={setWsIp}
+        sendCommand={sendCommand}
       />
 
       {/* Navigation Tabs for Clean Organization */}
@@ -130,7 +132,13 @@ export const App: React.FC = () => {
             />
           </div>
 
-          {/* Row 2: Audio DSP & Quick Dances */}
+          {/* Row 2: Hanthanata Payana Sanda Song Choreography Showcase */}
+          <HanthaneShowcase 
+            telemetry={telemetry}
+            sendCommand={sendCommand}
+          />
+
+          {/* Row 3: Audio DSP & Quick Dances */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
             <AudioVisualizer 
               data={telemetry.audio}
@@ -142,7 +150,7 @@ export const App: React.FC = () => {
             />
           </div>
 
-          {/* Row 3: Quick LED & Emotion Overrides */}
+          {/* Row 4: Quick LED & Emotion Overrides */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
             <LedControl 
               telemetry={telemetry}
@@ -154,7 +162,7 @@ export const App: React.FC = () => {
             />
           </div>
 
-          {/* Row 4: Live Telemetry & ESP32 Log Screen */}
+          {/* Row 5: Live Telemetry & ESP32 Log Screen */}
           <LogFeed logs={logs} clearLogs={() => sendCommand('CLEAR_LOGS')} />
         </div>
       )}
@@ -178,9 +186,13 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: CHOREOGRAPHY MATRIX */}
+      {/* TAB 3: CHOREOGRAPHY MATRIX & SONG SHOWCASE */}
       {activeTab === 'choreo' && (
         <div className="flex flex-col gap-5">
+          <HanthaneShowcase 
+            telemetry={telemetry}
+            sendCommand={sendCommand}
+          />
           <PresetDances 
             telemetry={telemetry}
             sendCommand={sendCommand}
